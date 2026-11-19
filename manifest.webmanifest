@@ -1,0 +1,14 @@
+{
+  "name": "CekPlat - Cek Asal Plat Nomor",
+  "short_name": "CekPlat",
+  "description": "Cek wilayah, Samsat, dan jenis kendaraan dari plat nomor, fokus plat D (Bandung Raya).",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#2f6bff",
+  "lang": "id",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
