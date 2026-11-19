@@ -6,13 +6,29 @@
  * Format UMD: bisa dipakai di browser (window.PlatData) maupun Node (require).
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory();
-  else root.PlatData = factory();
-})(typeof self !== 'undefined' ? self : this, function () {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./series.js'));
+  else root.PlatData = factory(root.PlatSeries);
+})(typeof self !== 'undefined' ? self : this, function (Series) {
   'use strict';
 
   /* ---------------------------------------------------------------- Sumber */
   var SOURCES = {
+    auto2000Jkt: {
+      title: 'Auto2000 - Kode Plat Nomor Belakang Jakarta',
+      url: 'https://auto2000.co.id/berita-dan-tips/kode-plat-nomor-belakang-jakarta'
+    },
+    getandride: {
+      title: 'GetAndRide - Detail Kode Plat Nomor Belakang',
+      url: 'https://blog.getandride.com/tips/detail-kode-plat-nomor-belakang-kendaraan-indonesia-beserta-wilayahnya/'
+    },
+    auto2000H: {
+      title: 'Auto2000 - Plat H Daerah Mana?',
+      url: 'https://auto2000.co.id/berita-dan-tips/plat-nomor-h-tips'
+    },
+    moladin: {
+      title: 'Moladin - 300+ Kode Plat Nomor Belakang Kendaraan dan Daerahnya',
+      url: 'https://moladin.com/news/kode-plat-nomor-belakang-kendaraan-dan-daerahnya-2/'
+    },
     popmama: {
       title: 'Popmama - Plat D Daerah Mana?',
       url: 'https://www.popmama.com/life/health/plat-d-daerah-mana-ini-daftar-lengkap-wilayah-dan-cara-cek-pajaknya-00-wjk9l-516pwd'
@@ -336,6 +352,119 @@
     { code: 'Nomor 1-99 tanpa seri', title: 'TNKB Khusus pejabat', text: 'Pejabat provinsi memakai kode wilayah dengan angka 1-5 dan seterusnya tanpa huruf seri (1 Gubernur, 2 Wakil Gubernur, 3 Ketua DPRD Provinsi, 4 Kajati, 5 Ketua Pengadilan Tinggi, 6-99 pejabat lain).', source: 'hukumonline' }
   ];
 
+  /* ------------------------------------------------ Indeks huruf seri semua kode */
+  /*
+   * SERIES_INDEX[kode][huruf] = [ { name, province, letters }, ... ]
+   * Lebih dari satu entri berarti sumber mencatat huruf itu untuk beberapa daerah.
+   * Plat D tidak masuk indeks ini; ia memakai LETTER_MAP di atas.
+   */
+  var SERIES_INDEX = {};
+  var AREA_LIST = []; // untuk pencarian balik: { prefix, name, province, letters }
+
+  function provinceOf(prefix) {
+    return PREFIXES[prefix] ? PREFIXES[prefix].province : '';
+  }
+
+  Object.keys(Series.RAW).forEach(function (prefix) {
+    var idx = (SERIES_INDEX[prefix] = {});
+    Series.RAW[prefix].forEach(function (row) {
+      var area = { prefix: prefix, name: row[0], letters: row[1].split(''), province: row[2] || provinceOf(prefix) };
+      AREA_LIST.push(area);
+      area.letters.forEach(function (l) { (idx[l] = idx[l] || []).push(area); });
+    });
+  });
+
+  // Plat D dimasukkan ke daftar pencarian (huruf diambil dari LETTER_MAP).
+  Object.keys(REGIONS).forEach(function (key) {
+    var letters = Object.keys(LETTER_MAP).filter(function (l) {
+      var info = LETTER_MAP[l];
+      return (info.candidates || [info.region]).indexOf(key) !== -1;
+    });
+    AREA_LIST.push({ prefix: 'D', name: REGIONS[key].name, province: 'Jawa Barat', letters: letters, regionKey: key });
+  });
+
+  Object.keys(Series.WHOLE).forEach(function (prefix) {
+    AREA_LIST.push({ prefix: prefix, name: Series.WHOLE[prefix].name, province: provinceOf(prefix), letters: Series.ALL.split('') });
+  });
+
+  /** Kode yang punya rincian huruf seri -> daerah. */
+  function hasDetail(prefix) {
+    return prefix === 'D' || !!SERIES_INDEX[prefix] || !!Series.WHOLE[prefix];
+  }
+
+  /**
+   * Asal daerah dari kode wilayah + huruf pertama seri.
+   * @returns {null | {candidates:[{name,province,letters,regionKey?}], confidence, note, sources}}
+   */
+  function lookupOrigin(prefix, letter) {
+    letter = (letter || '').charAt(0);
+
+    if (prefix === 'D') {
+      var info = LETTER_MAP[letter];
+      if (!info) return null;
+      var keys = info.candidates || [info.region];
+      return {
+        candidates: keys.map(function (k) {
+          return { name: REGIONS[k].name, province: 'Jawa Barat', regionKey: k, letters: lettersOfRegion(k) };
+        }),
+        confidence: info.confidence,
+        note: info.note,
+        sources: ['popmama', 'moladinSuffix', 'moladinList', 'detikSuffix']
+      };
+    }
+
+    if (Series.WHOLE[prefix]) {
+      var w = Series.WHOLE[prefix];
+      return {
+        candidates: [{ name: w.name, province: provinceOf(prefix), letters: Series.ALL.split('') }],
+        confidence: w.conf,
+        note: w.note,
+        sources: ['detikPrefix']
+      };
+    }
+
+    var hit = SERIES_INDEX[prefix] && SERIES_INDEX[prefix][letter];
+    if (!hit) return null;
+    var meta = Series.META[prefix] || Series.DEFAULT_META;
+    var out = {
+      candidates: hit.map(function (a) { return { name: a.name, province: a.province, letters: a.letters }; }),
+      confidence: meta.conf,
+      note: meta.note,
+      sources: meta.src
+    };
+    if (hit.length > 1) {
+      out.confidence = 'rendah';
+      out.note = 'Huruf ' + letter + ' tercatat untuk lebih dari satu daerah di tabel sumber: ' +
+        hit.map(function (a) { return a.name; }).join(' / ') + '. Tidak bisa dipastikan hanya dari plat.';
+    }
+    return out;
+  }
+
+  function lettersOfRegion(key) {
+    return Object.keys(LETTER_MAP).filter(function (l) {
+      var info = LETTER_MAP[l];
+      return (info.candidates || [info.region]).indexOf(key) !== -1;
+    });
+  }
+
+  /** Daftar daerah sebuah kode, urut sesuai tabel. */
+  function areasOfPrefix(prefix) {
+    return AREA_LIST.filter(function (a) { return a.prefix === prefix; });
+  }
+
+  /** Pencarian balik: cari daerah (atau kode) lalu tampilkan kode + hurufnya. */
+  function searchAreas(q, limit) {
+    q = String(q || '').toLowerCase().trim();
+    if (!q) return [];
+    // Kueri yang persis sama dengan sebuah kode wilayah (mis. "dk") hanya mencari kode itu.
+    var byCode = AREA_LIST.filter(function (a) { return a.prefix.toLowerCase() === q; });
+    if (byCode.length) return limit ? byCode.slice(0, limit) : byCode;
+    var res = AREA_LIST.filter(function (a) {
+      return a.name.toLowerCase().indexOf(q) !== -1 || a.province.toLowerCase().indexOf(q) !== -1;
+    });
+    return limit ? res.slice(0, limit) : res;
+  }
+
   /* ------------------------------------------------------------ Lainnya */
   var NUMBER_NOTE = 'Rentang nomor adalah aturan penjatahan awal. Karena nomor bisa digunakan ulang dengan seri huruf berbeda, hasil jenis kendaraan bersifat indikatif.';
 
@@ -345,6 +474,12 @@
     SOURCES: SOURCES,
     REGIONS: REGIONS,
     LETTER_MAP: LETTER_MAP,
+    SERIES_INDEX: SERIES_INDEX,
+    AREA_LIST: AREA_LIST,
+    hasDetail: hasDetail,
+    lookupOrigin: lookupOrigin,
+    areasOfPrefix: areasOfPrefix,
+    searchAreas: searchAreas,
     SAMSAT: SAMSAT,
     NUMBER_RANGES: NUMBER_RANGES,
     COLORS: COLORS,

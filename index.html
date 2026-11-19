@@ -3,12 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>CekPlat - Cek Asal Plat Nomor Kendaraan</title>
-  <meta name="description" content="Masukkan plat nomor, misalnya D 5002 FA, dan lihat asal wilayah (Kota Bandung, Cimahi, Kabupaten Bandung, Bandung Barat), Samsat, dan jenis kendaraan.">
-  <meta name="theme-color" content="#2f6bff">
+  <title>CekPlat - Plat ini dari mana?</title>
+  <meta name="description" content="Ketik plat nomor, misalnya D 5002 FA atau B 1234 SKA, dan baca asalnya: kota atau kabupaten, jenis kendaraan, dan Samsat. Data per huruf seri untuk hampir seluruh kode wilayah Indonesia.">
+  <meta name="theme-color" content="#ebe4d2">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon.svg">
+  <link rel="preload" href="fonts/barlow-condensed-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/style.css">
   <script>
     // Terapkan tema sebelum render agar tidak berkedip.
@@ -19,122 +21,131 @@
   </script>
 </head>
 <body>
-  <a class="skip" href="#cek">Lewati ke konten</a>
+  <a class="skip" href="#main">Lewati ke konten</a>
 
-  <header class="topbar">
-    <div class="wrap topbar-in">
-      <a class="brand" href="./" aria-label="CekPlat beranda">
-        <span class="brand-mark" aria-hidden="true">D</span>
-        <span class="brand-name">Cek<b>Plat</b></span>
+  <header class="top">
+    <div class="wrap top-in">
+      <a class="brand" href="./" aria-label="CekPlat, beranda">
+        <span class="brand-plate" aria-hidden="true">D<i></i>5002</span>
+        <span class="brand-word">CEK<b>PLAT</b></span>
       </a>
-      <nav class="tabs" role="tablist" aria-label="Menu utama">
-        <button class="tab is-active" role="tab" id="tab-cek" aria-controls="panel-cek" aria-selected="true" data-tab="cek">Cek Plat</button>
-        <button class="tab" role="tab" id="tab-banyak" aria-controls="panel-banyak" aria-selected="false" data-tab="banyak" tabindex="-1">Cek Banyak</button>
-        <button class="tab" role="tab" id="tab-ref" aria-controls="panel-ref" aria-selected="false" data-tab="ref" tabindex="-1">Referensi</button>
-        <button class="tab" role="tab" id="tab-info" aria-controls="panel-info" aria-selected="false" data-tab="info" tabindex="-1">Tentang</button>
-      </nav>
-      <button class="icon-btn" id="theme-btn" type="button" aria-label="Ganti tema terang/gelap" title="Ganti tema">
-        <span aria-hidden="true" id="theme-icon">☾</span>
+      <button class="mode-btn" id="theme-btn" type="button" aria-label="Ganti tema terang atau gelap">
+        <span id="theme-label">Gelap</span>
       </button>
+    </div>
+    <div class="hazard" aria-hidden="true"></div>
+    <div class="wrap">
+      <nav class="tabs" role="tablist" aria-label="Menu utama">
+        <button class="tab is-active" role="tab" id="tab-cek" aria-controls="panel-cek" aria-selected="true" data-tab="cek">Cek plat</button>
+        <button class="tab" role="tab" id="tab-banyak" aria-controls="panel-banyak" aria-selected="false" data-tab="banyak" tabindex="-1">Banyak sekaligus</button>
+        <button class="tab" role="tab" id="tab-ref" aria-controls="panel-ref" aria-selected="false" data-tab="ref" tabindex="-1">Peta huruf</button>
+        <button class="tab" role="tab" id="tab-info" aria-controls="panel-info" aria-selected="false" data-tab="info" tabindex="-1">Soal akurasi</button>
+      </nav>
     </div>
   </header>
 
-  <main id="cek" class="wrap">
+  <main id="main" class="wrap">
 
-    <!-- ===================== CEK PLAT ===================== -->
+    <!-- ============================ CEK PLAT ============================ -->
     <section id="panel-cek" class="panel is-active" role="tabpanel" aria-labelledby="tab-cek">
       <div class="hero">
-        <h1>Cek asal plat nomor</h1>
-        <p class="lead">Ketik plat nomor untuk melihat wilayah, Samsat yang melayani, dan jenis kendaraannya. Fokus akurat untuk plat <b>D</b> (Bandung Raya).</p>
+        <p class="kicker">Pembaca plat nomor</p>
+        <h1>Plat ini <em>dari mana?</em></h1>
+        <p class="lead">Ketik langsung di plat. Huruf seri di belakang angka menunjukkan kota atau kabupaten asalnya.</p>
       </div>
 
-      <form id="search-form" class="card search" autocomplete="off" novalidate>
-        <label class="field-label" for="plate-input">Nomor plat</label>
-        <div class="input-row">
-          <input id="plate-input" class="plate-input" type="text" inputmode="text" autocapitalize="characters"
+      <form id="search-form" class="deck" autocomplete="off" novalidate>
+        <div class="plate-box" id="plate-box">
+          <label class="sr-only" for="plate-input">Nomor plat</label>
+          <input id="plate-input" class="plate-field" type="text" inputmode="text" autocapitalize="characters"
                  autocorrect="off" spellcheck="false" maxlength="14" placeholder="D 5002 FA"
                  aria-describedby="plate-hint" enterkeyhint="search">
-          <button class="btn primary" type="submit">Cek</button>
-        </div>
-        <p id="plate-hint" class="hint" role="status" aria-live="polite">Contoh: <button type="button" class="link" data-example="D 5002 FA">D 5002 FA</button>,
-          <button type="button" class="link" data-example="D 1234 UX">D 1234 UX</button>,
-          <button type="button" class="link" data-example="D 7123 SA">D 7123 SA</button>,
-          <button type="button" class="link" data-example="B 1234 ABC">B 1234 ABC</button></p>
-
-        <details class="opts">
-          <summary>Opsi tambahan: warna plat &amp; masa berlaku</summary>
-          <div class="opts-body">
-            <div>
-              <span class="field-label" id="color-label">Warna plat (menentukan penggunaan)</span>
-              <div class="chips" id="color-chips" role="radiogroup" aria-labelledby="color-label"></div>
-            </div>
-            <div class="expiry">
-              <label class="field-label" for="expiry-input">Masa berlaku di plat (BB.TT)</label>
-              <input id="expiry-input" class="text-input" type="text" inputmode="numeric" maxlength="5" placeholder="05.27">
-            </div>
+          <div class="plate-foot">
+            <label for="expiry-input">Berlaku s.d.</label>
+            <input id="expiry-input" class="expiry-field" type="text" inputmode="numeric" maxlength="5" placeholder="05.27" aria-label="Masa berlaku di plat, format bulan titik tahun">
           </div>
-        </details>
+        </div>
+
+        <div class="deck-side">
+          <fieldset class="swatches-wrap">
+            <legend>Warna plat</legend>
+            <div class="swatches" id="color-chips" role="radiogroup" aria-label="Warna plat"></div>
+            <p class="swatch-name" id="color-name" aria-live="polite"></p>
+          </fieldset>
+          <button class="btn go" type="submit">Cek plat</button>
+        </div>
       </form>
 
+      <p id="plate-hint" class="hint" role="status" aria-live="polite">
+        Coba:
+        <button type="button" class="ex" data-example="B 1234 SKA">B 1234 SKA</button>
+        <button type="button" class="ex" data-example="D 5002 FA">D 5002 FA</button>
+        <button type="button" class="ex" data-example="H 4821 AB">H 4821 AB</button>
+        <button type="button" class="ex" data-example="AB 3456 EA">AB 3456 EA</button>
+        <button type="button" class="ex" data-example="D 1234 WA">D 1234 WA</button>
+      </p>
+
       <div id="history-wrap" class="history" hidden>
-        <div class="history-head">
-          <h2>Riwayat</h2>
-          <button class="link" type="button" id="history-clear">Hapus riwayat</button>
-        </div>
-        <div id="history" class="chips"></div>
+        <span class="mini-label">Terakhir dicek</span>
+        <div id="history" class="history-list"></div>
+        <button class="link" type="button" id="history-clear">hapus</button>
       </div>
 
       <div id="result" aria-live="polite"></div>
     </section>
 
-    <!-- ===================== CEK BANYAK ===================== -->
+    <!-- ========================= BANYAK SEKALIGUS ========================= -->
     <section id="panel-banyak" class="panel" role="tabpanel" aria-labelledby="tab-banyak" hidden>
       <div class="hero">
-        <h1>Cek banyak plat sekaligus</h1>
-        <p class="lead">Tempel beberapa plat, satu per baris (maksimal 500). Hasil bisa disalin atau diunduh sebagai CSV.</p>
+        <p class="kicker">Mode massal</p>
+        <h1>Banyak plat, <em>sekali proses</em></h1>
+        <p class="lead">Satu plat per baris, maksimal 500. Hasil bisa disalin ke Excel atau diunduh sebagai CSV.</p>
       </div>
-      <div class="card">
+      <div class="sheet">
         <label class="field-label" for="bulk-input">Daftar plat</label>
         <textarea id="bulk-input" class="bulk-input" rows="7" spellcheck="false" autocapitalize="characters"
-                  placeholder="D 5002 FA&#10;D 1234 UX&#10;D 7123 SA&#10;B 1234 ABC"></textarea>
+                  placeholder="D 5002 FA&#10;B 1234 SKA&#10;H 4821 AB&#10;AB 3456 EA"></textarea>
         <div class="row-actions">
-          <button class="btn primary" type="button" id="bulk-run">Proses</button>
+          <button class="btn go" type="button" id="bulk-run">Proses</button>
           <button class="btn" type="button" id="bulk-copy" disabled>Salin hasil</button>
           <button class="btn" type="button" id="bulk-csv" disabled>Unduh CSV</button>
-          <span class="hint" id="bulk-count" role="status"></span>
+          <span class="hint inline" id="bulk-count" role="status"></span>
         </div>
       </div>
       <div id="bulk-result" class="table-wrap" hidden></div>
     </section>
 
-    <!-- ===================== REFERENSI ===================== -->
+    <!-- ============================== PETA HURUF ============================== -->
     <section id="panel-ref" class="panel" role="tabpanel" aria-labelledby="tab-ref" hidden>
       <div class="hero">
-        <h1>Referensi</h1>
-        <p class="lead">Tabel acuan yang dipakai aplikasi, lengkap dengan tingkat keyakinan datanya.</p>
+        <p class="kicker">Tabel acuan</p>
+        <h1>Peta <em>huruf seri</em></h1>
+        <p class="lead">Pilih kode wilayah untuk melihat huruf apa milik daerah mana, atau cari sebuah daerah untuk tahu kode dan hurufnya.</p>
       </div>
       <div id="ref-content"></div>
     </section>
 
-    <!-- ===================== TENTANG ===================== -->
+    <!-- ============================== AKURASI ============================== -->
     <section id="panel-info" class="panel" role="tabpanel" aria-labelledby="tab-info" hidden>
       <div class="hero">
-        <h1>Tentang &amp; akurasi data</h1>
+        <p class="kicker">Baca ini dulu</p>
+        <h1>Seberapa <em>bisa dipercaya?</em></h1>
       </div>
       <div id="info-content"></div>
     </section>
 
   </main>
 
-  <footer class="footer">
+  <footer class="foot">
     <div class="wrap">
-      <p>CekPlat adalah alat bantu informasi umum dan bukan layanan resmi Polri atau Samsat. Data berasal dari sumber publik dan dapat berubah. Untuk keperluan hukum atau administrasi, verifikasi ke Samsat/Bapenda setempat.</p>
-      <p class="muted">Tekan <kbd>/</kbd> untuk langsung mengetik plat.</p>
+      <p>CekPlat adalah alat bantu informasi umum, bukan layanan resmi Polri atau Samsat. Data berasal dari sumber publik dan bisa berubah. Untuk urusan hukum atau administrasi, pastikan ke Samsat atau Bapenda setempat.</p>
+      <p class="muted">Tekan <kbd>/</kbd> untuk langsung mengetik plat. Semua diproses di perangkat Anda.</p>
     </div>
   </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
+  <script src="js/series.js"></script>
   <script src="js/data.js"></script>
   <script src="js/parser.js"></script>
   <script src="js/app.js"></script>

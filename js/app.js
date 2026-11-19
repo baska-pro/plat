@@ -4,7 +4,7 @@
   var D = window.PlatData;
   var P = window.PlatParser;
 
-  /* ------------------------------------------------------------ util */
+  /* ------------------------------------------------------------------ util */
   function $(sel, ctx) { return (ctx || document).querySelector(sel); }
   function $$(sel, ctx) { return Array.prototype.slice.call((ctx || document).querySelectorAll(sel)); }
 
@@ -25,8 +25,7 @@
   var toastTimer;
   function toast(msg) {
     var t = $('#toast');
-    t.textContent = msg;
-    t.hidden = false;
+    t.textContent = msg; t.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { t.hidden = true; }, 2200);
   }
@@ -46,32 +45,40 @@
 
   function mapsUrl(q) { return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q); }
   function telUrl(p) { return 'tel:' + p.replace(/[^\d+]/g, '').replace(/^0/, '+62'); }
+  function uniq(arr) { return arr.filter(function (x, i) { return x && arr.indexOf(x) === i; }); }
 
-  /* ----------------------------------------------------------- state */
-  var state = {
-    color: store('color') || '',
-    history: store('history') || []
-  };
+  /** "ABCDEFGHIJKLMNOPR" -> "A–P, R" (rentang berurutan >= 3 huruf diringkas) */
+  function compress(letters) {
+    var arr = (Array.isArray(letters) ? letters.slice() : String(letters).split('')).sort();
+    var out = [], i = 0;
+    while (i < arr.length) {
+      var j = i;
+      while (j + 1 < arr.length && arr[j + 1].charCodeAt(0) === arr[j].charCodeAt(0) + 1) j++;
+      out.push(j - i >= 2 ? arr[i] + '–' + arr[j] : arr.slice(i, j + 1).join(', '));
+      i = j + 1;
+    }
+    return out.join(', ');
+  }
 
-  /* ------------------------------------------------------------ tema */
+  var DEFAULT_PLATE = { bg: '#f4f1e8', fg: '#111111' };
+  var state = { color: store('color') || '', history: store('history') || [] };
+
+  /* ------------------------------------------------------------------ tema */
+  function isDark(t) { return t === 'dark' || (t === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches); }
   function applyTheme(t) {
     document.documentElement.setAttribute('data-theme', t);
-    var dark = t === 'dark' || (t === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    $('#theme-icon').textContent = dark ? '☀' : '☾';
+    $('#theme-label').textContent = isDark(t) ? 'Terang' : 'Gelap';
     var meta = $('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', dark ? '#0b1020' : '#2f6bff');
+    if (meta) meta.setAttribute('content', isDark(t) ? '#131311' : '#ebe4d2');
   }
   $('#theme-btn').addEventListener('click', function () {
-    var cur = document.documentElement.getAttribute('data-theme');
-    var dark = cur === 'dark' || (cur === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    var next = dark ? 'light' : 'dark';
-    store('theme', next);
+    var next = isDark(document.documentElement.getAttribute('data-theme')) ? 'light' : 'dark';
     try { localStorage.setItem('cekplat.theme', next); } catch (e) {}
     applyTheme(next);
   });
   applyTheme(document.documentElement.getAttribute('data-theme') || 'auto');
 
-  /* ------------------------------------------------------------- tab */
+  /* ------------------------------------------------------------------- tab */
   function showTab(name, focus) {
     $$('.tab').forEach(function (b) {
       var on = b.getAttribute('data-tab') === name;
@@ -82,12 +89,11 @@
     });
     $$('.panel').forEach(function (p) {
       var on = p.id === 'panel-' + name;
-      p.hidden = !on;
-      p.classList.toggle('is-active', on);
+      p.hidden = !on; p.classList.toggle('is-active', on);
     });
     if (name === 'ref') renderRef();
     if (name === 'info') renderInfo();
-    if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+    if (location.hash !== '#' + name) history.replaceState(null, '', location.pathname + location.search + '#' + name);
     window.scrollTo({ top: 0 });
   }
   $$('.tab').forEach(function (b, i, all) {
@@ -100,293 +106,309 @@
     });
   });
 
-  /* --------------------------------------------------------- warna */
-  function renderColorChips() {
-    var box = $('#color-chips');
-    var html = '<button type="button" class="chip" role="radio" data-color="" aria-checked="' + (state.color === '') + '">Tidak tahu</button>';
+  /* ------------------------------------------------------------- warna plat */
+  function paintPlate() {
+    var c = state.color && D.COLORS[state.color] ? D.COLORS[state.color] : DEFAULT_PLATE;
+    var box = $('#plate-box');
+    box.style.setProperty('--pb', c.bg);
+    box.style.setProperty('--pf', c.fg);
+    $('#color-name').textContent = state.color
+      ? D.COLORS[state.color].label + ': ' + D.COLORS[state.color].usage.toLowerCase() + '.'
+      : 'Belum dipilih. Warna plat yang menentukan pribadi, umum, atau dinas.';
+  }
+  function renderSwatches() {
+    var h = '<button type="button" class="sw" role="radio" data-color="" aria-label="Belum tahu" title="Belum tahu" aria-checked="' + (state.color === '') + '">?</button>';
     Object.keys(D.COLORS).forEach(function (k) {
       var c = D.COLORS[k];
-      html += '<button type="button" class="chip" role="radio" data-color="' + k + '" aria-checked="' + (state.color === k) + '">' +
-        '<span class="dot" style="background:' + c.bg + '"></span>' + esc(c.label) + '</button>';
+      h += '<button type="button" class="sw" role="radio" data-color="' + k + '" aria-label="' + esc(c.label) + '" title="' + esc(c.label) + '" style="--c:' + c.bg + '" aria-checked="' + (state.color === k) + '"></button>';
     });
-    box.innerHTML = html;
+    $('#color-chips').innerHTML = h;
+    paintPlate();
   }
   $('#color-chips').addEventListener('click', function (e) {
-    var b = e.target.closest('.chip');
+    var b = e.target.closest('.sw');
     if (!b) return;
     state.color = b.getAttribute('data-color');
     store('color', state.color);
-    renderColorChips();
-    if ($('#plate-input').value.trim()) runSearch(false);
+    renderSwatches();
+    if ($('#plate-input').value.trim()) runSearch(false, true);
   });
 
-  /* ------------------------------------------------------- render hasil */
-  function confBadge(c) {
-    if (c === 'tinggi') return '<span class="badge ok">Keyakinan tinggi</span>';
-    if (c === 'sedang') return '<span class="badge mid">Keyakinan sedang</span>';
-    return '<span class="badge warn">Ambigu / perlu verifikasi</span>';
+  /* -------------------------------------------------------------- hasil */
+  function stampHtml(conf) {
+    var m = { tinggi: ['tinggi', 'Keyakinan tinggi'], sedang: ['sedang', 'Keyakinan sedang'], rendah: ['rendah', 'Ambigu'], netral: ['netral', 'Tingkat provinsi'] }[conf];
+    return m ? '<div class="stamp ' + m[0] + '">' + m[1] + '</div>' : '';
   }
 
-  function plateHtml(r) {
-    var color = r.color || D.COLORS.putih;
-    var num = r.number != null ? String(r.number) : '';
+  function originView(r) {
+    var v = { kicker: 'Asal kendaraan', names: [], sub: '', stamp: '', long: false };
+    if (r.kind !== 'reguler') {
+      v.kicker = r.area.province;
+      v.names = [r.area.title];
+      v.sub = esc(r.area.areas);
+      return v;
+    }
+    if (r.origin) {
+      var cs = r.origin.candidates;
+      v.names = cs.map(function (c) { return c.name; });
+      var provs = uniq(cs.map(function (c) { return c.province; }));
+      v.sub = '<b>' + esc(provs.join(' / ')) + '</b>';
+      if (cs.length === 1 && cs[0].letters && cs[0].letters.length > 1 && cs[0].letters.length < 26) {
+        v.sub += ' &middot; seluruh huruf seri daerah ini: <b>' + esc(compress(cs[0].letters)) + '</b>';
+      }
+      v.stamp = stampHtml(r.origin.confidence);
+    } else if (r.area) {
+      v.kicker = 'Baru sampai tingkat provinsi';
+      v.names = [r.area.province];
+      v.sub = D.hasDetail(r.prefix)
+        ? 'Daerah di dalam kode ' + esc(r.prefix) + ' belum bisa ditentukan dari plat ini.'
+        : 'Rincian huruf seri untuk kode ' + esc(r.prefix) + ' belum tersedia di data aplikasi ini.';
+      v.stamp = stampHtml('netral');
+    } else {
+      v.kicker = 'Tidak dikenali';
+      v.names = ['Kode wilayah tidak dikenal'];
+    }
+    v.long = v.names.some(function (n) { return n.length > 22; });
+    return v;
+  }
+
+  function plateShowHtml(r) {
+    var c = r.color || DEFAULT_PLATE;
     var main;
     if (r.kind === 'reguler') {
-      main = '<span>' + esc(r.prefix) + '</span><span>' + esc(num) + '</span>' + (r.series ? '<span>' + esc(r.series) + '</span>' : '');
+      main = '<span class="p-kode">' + esc(r.prefix) + '</span><span class="p-nomor">' + esc(r.number) + '</span>' +
+        (r.series ? '<span class="p-seri">' + esc(r.series) + '</span>' : '');
     } else {
-      main = '<span>' + esc(r.display) + '</span>';
+      main = '<span class="p-nomor">' + esc(r.display) + '</span>';
     }
-    var sub = r.expiry && r.expiry.valid ? String(('0' + r.expiry.month).slice(-2)) + '.' + String(r.expiry.year).slice(-2) : '';
-    return '<div class="plate-wrap"><div class="plate" style="--plate-bg:' + color.bg + ';--plate-fg:' + color.fg + '" role="img" aria-label="Plat ' + esc(r.display) + '">' +
-      '<div class="plate-main">' + main + '</div><div class="plate-sub">' + esc(sub) + '</div></div></div>';
+    var sub = r.expiry && r.expiry.valid ? ('0' + r.expiry.month).slice(-2) + '.' + String(r.expiry.year).slice(-2) : '';
+    return '<div class="plate-show-wrap"><div class="plate-show" style="--pb:' + c.bg + ';--pf:' + c.fg + '" role="img" aria-label="Plat ' + esc(r.display) + '">' +
+      '<div class="plate-parts">' + main + '</div><div class="plate-foot">' + esc(sub) + '</div></div></div>';
+  }
+
+  function decoderHtml(r) {
+    if (r.kind !== 'reguler') return '';
+    var first = r.series ? r.series.charAt(0) : '';
+    var province = r.origin ? uniq(r.origin.candidates.map(function (c) { return c.province; })).join(' / ') : (r.area ? r.area.province : '—');
+    var seriVal = r.origin
+      ? esc(first) + ' → ' + esc(r.origin.candidates.map(function (c) { return c.name; }).join(' / '))
+      : '—';
+    var seriSmall = r.series
+      ? 'Huruf pertama setelah angka (<b>' + esc(first) + '</b>) yang menentukan daerah.'
+      : 'Plat ini tidak punya huruf seri.';
+    return '<div class="decoder">' +
+      '<div class="cell kode"><span class="cell-token">' + esc(r.prefix) + '</span><div class="lbl">Kode wilayah</div><div class="val">' + esc(province) + '</div><div class="small">Huruf di depan angka.</div></div>' +
+      '<div class="cell nomor"><span class="cell-token">' + esc(r.number) + '</span><div class="lbl">Nomor urut</div><div class="val">' + esc(r.vehicle ? r.vehicle.label : '—') + '</div>' +
+      '<div class="small">' + (r.vehicle ? 'Rentang nomor ' + r.vehicle.from + '–' + r.vehicle.to + '.' : '') + '</div></div>' +
+      '<div class="cell seri"><span class="cell-token">' + esc(r.series || '—') + '</span><div class="lbl">Seri huruf</div><div class="val">' + seriVal + '</div><div class="small">' + seriSmall + '</div></div>' +
+      '</div>';
+  }
+
+  function keysHtml(r) {
+    if (r.kind !== 'reguler' || !r.series || !D.hasDetail(r.prefix) || !r.origin) return '';
+    var first = r.series.charAt(0);
+    var own = {};
+    r.origin.candidates.forEach(function (c) { (c.letters || []).forEach(function (l) { own[l] = 1; }); });
+    var keys = '';
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(function (l) {
+      var o = D.lookupOrigin(r.prefix, l);
+      var cls = l === first ? 'now' : (own[l] ? 'same' : (o ? 'map' : 'none'));
+      var title = o ? l + ': ' + o.candidates.map(function (c) { return c.name; }).join(' / ') : l + ': tidak tercatat di tabel';
+      keys += '<div class="key ' + cls + '" title="' + esc(title) + '">' + l + '</div>';
+    });
+    var names = r.origin.candidates.map(function (c) { return c.name; }).join(' / ');
+    return '<div class="keys-wrap"><div class="keys-head"><h2>Deretan huruf kode ' + esc(r.prefix) + '</h2>' +
+      '<p>Huruf <b>' + esc(first) + '</b> &rarr; ' + esc(names) + '</p></div>' +
+      '<div class="keys" role="img" aria-label="Huruf A sampai Z untuk kode ' + esc(r.prefix) + ', huruf ' + esc(first) + ' disorot">' + keys + '</div>' +
+      '<div class="keys-legend"><span><i class="a"></i>huruf plat ini</span><span><i class="b"></i>huruf lain daerah yang sama</span><span><i class="c"></i>daerah lain</span></div></div>';
+  }
+
+  function sourcesHtml(ids) {
+    return (ids || []).map(function (id) {
+      var s = D.SOURCES[id];
+      return s ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' + esc(s.title) + '</a>' : '';
+    }).filter(Boolean).join('<br>');
   }
 
   function samsatHtml(r) {
     if (!r.samsat.length) return '';
     var ambiguous = r.regionCandidates && r.regionCandidates.length > 1;
-    var cols = r.samsat.length > 1 ? ' cols' : '';
-    var h = '<div class="card"><div class="section-title"><h2>Samsat yang melayani</h2></div>' +
-      '<div class="callout info"><span class="ic">i</span><span>' + esc(D.SAMSAT_NOTE) + '</span></div>' +
-      '<div class="samsat-list' + cols + '" style="margin-top:12px">';
+    var h = '<section><div class="sec-title"><h2>Samsat yang melayani</h2></div>' +
+      '<div class="note"><b class="tag">Info</b><span>' + esc(D.SAMSAT_NOTE) + '</span></div>' +
+      '<div class="samsat-grid' + (r.samsat.length > 1 ? ' cols' : '') + '" style="margin-top:12px">';
     r.samsat.forEach(function (s) {
-      h += '<div class="samsat">' +
-        (ambiguous ? '<div class="tag">' + esc(s.regionName) + '</div>' : '') +
-        '<div class="name">' + esc(s.name) + '</div>' +
-        '<div class="meta">' + esc(s.address) + '</div>' +
+      h += '<div class="samsat">' + (ambiguous ? '<div class="tag">' + esc(s.regionName) + '</div>' : '') +
+        '<div class="name">' + esc(s.name) + '</div><div class="meta">' + esc(s.address) + '</div>' +
         '<div class="meta">' + esc(s.phone) + ' &middot; ' + esc(s.hours) + '</div>' +
-        (s.note ? '<div class="note">' + esc(s.note) + '</div>' : '') +
-        '<div class="acts">' +
-        '<a class="btn small" target="_blank" rel="noopener" href="' + mapsUrl(s.name.replace(/\s*\(.*\)/, '') + ' ' + s.address) + '">Buka peta</a>' +
-        '<a class="btn small" href="' + telUrl(s.phone) + '">Telepon</a>' +
-        '</div></div>';
+        (s.note ? '<div class="note-i">' + esc(s.note) + '</div>' : '') +
+        '<div class="acts"><a class="btn small" target="_blank" rel="noopener" href="' + mapsUrl(s.name.replace(/\s*\(.*\)/, '') + ' ' + s.address) + '">Peta</a>' +
+        '<a class="btn small" href="' + telUrl(s.phone) + '">Telepon</a></div></div>';
     });
-    return h + '</div></div>';
+    return h + '</div></section>';
   }
 
   function resultHtml(r) {
-    if (!r.ok) {
-      return '<div class="callout err" role="alert"><span class="ic">!</span><span>' + esc(r.errors.join(' ')) + '</span></div>';
-    }
+    if (!r.ok) return '<div class="note err" role="alert"><b class="tag">Salah</b><span>' + esc(r.errors.join(' ')) + '</span></div>';
 
-    var title, sub = '', eyebrow = 'Asal kendaraan', badge = '';
+    var v = originView(r);
+    var names = v.names.map(function (n, i) {
+      return (i ? '<div class="or">ATAU</div>' : '') + '<div class="origin' + (v.long ? ' long' : '') + '">' + esc(n) + '</div>';
+    }).join('');
 
-    if (r.kind === 'reguler' && r.region) {
-      title = r.region.name;
-      badge = confBadge(r.letterInfo.confidence);
-      sub = r.area.province + ' &middot; ibu kota ' + esc(r.region.capital);
-    } else if (r.kind === 'reguler' && r.regionCandidates) {
-      title = r.regionCandidates.map(function (x) { return x.name; }).join(' atau ');
-    } else if (r.kind === 'reguler' && r.area) {
-      title = r.area.province;
-      sub = esc(r.area.areas);
-    } else if (r.kind === 'reguler') {
-      title = 'Kode wilayah tidak dikenal';
-    } else {
-      title = r.area.title;
-      sub = esc(r.area.areas);
-      eyebrow = r.area.province;
-    }
-
-    // wilayah ambigu: tampilkan kandidat
-    if (r.kind === 'reguler' && r.letterInfo && r.letterInfo.confidence === 'rendah' && r.regionCandidates && r.regionCandidates.length > 1) {
-      title = r.regionCandidates.map(function (x) { return x.name; }).join(' atau ');
-      sub = r.area.province;
-      badge = confBadge('rendah');
-    }
-
-    var facts = '';
+    var rows = '';
     if (r.kind === 'reguler') {
-      facts += '<div class="fact"><div class="k">Kode wilayah</div><div class="v">' + esc(r.prefix) + '</div>' +
-        '<div class="d">' + (r.area ? esc(r.area.province) : 'Tidak ada di basis data') + '</div></div>';
-
-      if (r.area) {
-        facts += '<div class="fact"><div class="k">Cakupan kode ' + esc(r.prefix) + '</div><div class="v" style="font-size:.95rem">' + esc(r.area.areas) + '</div></div>';
-      }
-
-      if (r.series && r.prefix === 'D') {
-        facts += '<div class="fact"><div class="k">Huruf seri</div><div class="v">' + esc(r.series) + '</div>' +
-          '<div class="d">Huruf pertama "' + esc(r.series.charAt(0)) + '" menentukan wilayah</div></div>';
-      } else if (r.series) {
-        facts += '<div class="fact"><div class="k">Huruf seri</div><div class="v">' + esc(r.series) + '</div><div class="d">Pembeda antar kendaraan</div></div>';
-      }
-
-      if (r.vehicle) {
-        facts += '<div class="fact"><div class="k">Jenis kendaraan (indikatif)</div><div class="v">' + esc(r.vehicle.label) + '</div>' +
-          '<div class="d">Nomor ' + r.number + ' ada di rentang ' + r.vehicle.from + '-' + r.vehicle.to + '</div></div>';
-      }
-
-      if (r.usage) {
-        facts += '<div class="fact"><div class="k">Penggunaan</div><div class="v">' + esc(r.usage) + '</div>' +
-          '<div class="d">' + esc(r.color.label) + '</div></div>';
-      } else {
-        facts += '<div class="fact"><div class="k">Penggunaan</div><div class="v">Belum diketahui</div>' +
-          '<div class="d">Pilih warna plat di "Opsi tambahan" untuk menentukan pribadi/umum/dinas</div></div>';
-      }
-
+      rows += '<div class="row"><div class="k">Penggunaan</div><div class="v">' + (r.usage ? esc(r.usage) + '<small>' + esc(r.color.label) + '</small>'
+        : 'Belum diketahui<small>Pilih warna plat di atas untuk menentukan pribadi, umum, atau dinas.</small>') + '</div></div>';
       if (r.expiry && r.expiry.valid) {
         var e = r.expiry;
-        var st = e.expired ? '<span class="badge bad">Sudah lewat</span>'
-          : (e.monthsLeft <= 3 ? '<span class="badge warn">Segera habis</span>' : '<span class="badge ok">Masih berlaku</span>');
-        facts += '<div class="fact"><div class="k">Masa berlaku plat</div><div class="v">' + esc(e.label) + '</div><div class="d">' + st + '</div></div>';
+        var st = e.expired ? '<span class="pill bad">Sudah lewat</span>' : (e.monthsLeft <= 3 ? '<span class="pill warn">Segera habis</span>' : '<span class="pill ok">Masih berlaku</span>');
+        rows += '<div class="row"><div class="k">Masa berlaku plat</div><div class="v">' + esc(e.label) + st + '</div></div>';
+      }
+      if (r.origin) {
+        rows += '<div class="row"><div class="k">Sumber data</div><div class="v"><small style="margin:0">' + sourcesHtml(r.origin.sources) + '</small></div></div>';
       }
     }
 
     var notes = '';
-    r.warnings.forEach(function (w) { notes += '<div class="callout warn"><span class="ic">!</span><span>' + esc(w) + '</span></div>'; });
-    r.notes.forEach(function (n) { notes += '<div class="callout info"><span class="ic">i</span><span>' + esc(n) + '</span></div>'; });
-    if (r.letterInfo && r.letterInfo.note) {
-      notes += '<div class="callout ' + (r.letterInfo.confidence === 'rendah' ? 'warn' : 'info') + '"><span class="ic">i</span><span>' + esc(r.letterInfo.note) + '</span></div>';
+    r.warnings.forEach(function (w) { notes += '<div class="note warn"><b class="tag">Perhatian</b><span>' + esc(w) + '</span></div>'; });
+    r.notes.forEach(function (n) { notes += '<div class="note"><b class="tag">Catatan</b><span>' + esc(n) + '</span></div>'; });
+    if (r.origin && r.origin.note) {
+      notes += '<div class="note' + (r.origin.confidence === 'rendah' ? ' warn' : '') + '"><b class="tag">Data</b><span>' + esc(r.origin.note) + '</span></div>';
     }
-    if (r.vehicle) {
-      notes += '<div class="callout info"><span class="ic">i</span><span>' + esc(D.NUMBER_NOTE) + '</span></div>';
+    if (r.origin && r.prefix !== 'D') {
+      notes += '<div class="note"><b class="tag">Samsat</b><span>Alamat Samsat rinci baru tersedia untuk Bandung Raya (plat D). Untuk daerah lain, tanyakan ke Bapenda provinsi setempat.</span></div>';
     }
+    if (r.vehicle) notes += '<div class="note"><b class="tag">Jenis</b><span>' + esc(D.NUMBER_NOTE) + '</span></div>';
 
-    var left = '<div class="card answer">' + plateHtml(r) +
-      '<div class="eyebrow">' + esc(eyebrow) + '</div>' +
-      '<div class="big">' + esc(title) + '</div>' +
-      '<div class="sub">' + sub + '</div>' +
-      (badge ? '<div style="margin-top:10px">' + badge + '</div>' : '') +
-      '<div class="actions">' +
-      '<button class="btn small" type="button" id="act-copy">Salin ringkasan</button>' +
-      '<button class="btn small" type="button" id="act-share">Bagikan</button>' +
-      '</div></div>';
-
-    var right = '<div class="card"><div class="section-title"><h2>Detail</h2></div><div class="facts">' + facts + '</div>' +
-      (notes ? '<div style="margin-top:12px">' + notes + '</div>' : '') + '</div>';
-
-    var html = '<div class="result two">' + left + '<div style="display:grid;gap:16px">' + right + samsatHtml(r) + '</div></div>';
-    return html;
+    return '<article class="slip">' +
+      '<div class="slip-head"><span>Hasil pemeriksaan</span><span>No. ' + esc(r.display) + '</span></div>' +
+      '<div class="slip-body">' +
+        '<div class="verdict"><p class="kicker">' + esc(v.kicker) + '</p>' + names +
+          '<p class="origin-sub">' + v.sub + '</p>' + v.stamp +
+          '<div class="actions"><button class="btn small" type="button" id="act-copy">Salin ringkasan</button><button class="btn small" type="button" id="act-share">Bagikan</button></div></div>' +
+        plateShowHtml(r) +
+      '</div>' +
+      decoderHtml(r) + keysHtml(r) +
+      '<div class="slip-rest">' + (notes ? '<div class="notes">' + notes + '</div>' : '') +
+        (rows ? '<div class="form-rows">' + rows + '</div>' : '') + samsatHtml(r) + '</div>' +
+      '</article>';
   }
 
-  /* ---------------------------------------------------------- pencarian */
-  var lastResult = null;
-
-  function runSearch(pushHistory) {
+  /* ----------------------------------------------------------- pencarian */
+  var liveTimer;
+  function runSearch(commit, quiet) {
     var input = $('#plate-input');
     var r = P.parsePlate(input.value, { color: state.color, expiry: $('#expiry-input').value });
-    lastResult = r;
-    var out = $('#result');
-    out.innerHTML = resultHtml(r);
-
     var hint = $('#plate-hint');
+
     if (!r.ok) {
+      if (quiet) { // saat mengetik: jangan berteriak soal format sebelum selesai
+        if (!input.value.trim()) $('#result').innerHTML = '';
+        return;
+      }
+      $('#result').innerHTML = resultHtml(r);
       hint.classList.add('is-error');
-    } else {
-      hint.classList.remove('is-error');
+      return;
+    }
+    hint.classList.remove('is-error');
+    $('#result').innerHTML = resultHtml(r);
+
+    if (commit) {
       input.value = r.display;
-      if (pushHistory !== false) addHistory(r.display);
+      addHistory(r.display);
       var q = new URL(location.href);
       q.searchParams.set('plat', r.display);
       history.replaceState(null, '', q.pathname + q.search + location.hash);
     }
 
     var copyBtn = $('#act-copy');
-    if (copyBtn) copyBtn.addEventListener('click', function () {
-      copy(r.display + ': ' + P.summarize(r), 'Ringkasan disalin');
-    });
+    if (copyBtn) copyBtn.addEventListener('click', function () { copy(r.display + ': ' + P.summarize(r), 'Ringkasan disalin'); });
     var shareBtn = $('#act-share');
     if (shareBtn) shareBtn.addEventListener('click', function () {
       var data = { title: 'CekPlat ' + r.display, text: r.display + ': ' + P.summarize(r), url: location.href };
-      if (navigator.share) navigator.share(data).catch(function () {});
-      else copy(location.href, 'Tautan disalin');
+      if (navigator.share) navigator.share(data).catch(function () {}); else copy(location.href, 'Tautan disalin');
     });
+    if (commit) {
+      var res = $('#result');
+      if (res.getBoundingClientRect().top > window.innerHeight * 0.6) res.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 
-  $('#search-form').addEventListener('submit', function (e) { e.preventDefault(); runSearch(true); });
-  $('#expiry-input').addEventListener('input', function () { if ($('#plate-input').value.trim()) runSearch(false); });
-
+  $('#search-form').addEventListener('submit', function (e) { e.preventDefault(); runSearch(true, false); });
   $('#plate-input').addEventListener('input', function () {
     var v = this.value.toUpperCase();
     if (v !== this.value) this.value = v;
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(function () { runSearch(false, true); }, 160);
   });
+  $('#expiry-input').addEventListener('input', function () { if ($('#plate-input').value.trim()) runSearch(false, true); });
 
   document.addEventListener('click', function (e) {
     var ex = e.target.closest('[data-example]');
-    if (ex) {
-      $('#plate-input').value = ex.getAttribute('data-example');
-      runSearch(true);
-    }
+    if (ex) { $('#plate-input').value = ex.getAttribute('data-example'); runSearch(true, false); }
   });
 
-  /* ---------------------------------------------------------- riwayat */
+  /* ------------------------------------------------------------ riwayat */
   function addHistory(p) {
-    state.history = [p].concat(state.history.filter(function (x) { return x !== p; })).slice(0, 10);
+    state.history = [p].concat(state.history.filter(function (x) { return x !== p; })).slice(0, 8);
     store('history', state.history);
     renderHistory();
   }
   function renderHistory() {
-    var wrap = $('#history-wrap');
-    wrap.hidden = state.history.length === 0;
+    $('#history-wrap').hidden = state.history.length === 0;
     $('#history').innerHTML = state.history.map(function (p) {
-      return '<button type="button" class="chip mono" data-hist="' + esc(p) + '">' + esc(p) + '</button>';
+      return '<button type="button" class="ex" data-hist="' + esc(p) + '">' + esc(p) + '</button>';
     }).join('');
   }
   $('#history').addEventListener('click', function (e) {
     var b = e.target.closest('[data-hist]');
     if (!b) return;
     $('#plate-input').value = b.getAttribute('data-hist');
-    runSearch(false);
+    runSearch(false, false);
   });
-  $('#history-clear').addEventListener('click', function () {
-    state.history = [];
-    store('history', []);
-    renderHistory();
-  });
+  $('#history-clear').addEventListener('click', function () { state.history = []; store('history', []); renderHistory(); });
 
-  /* ------------------------------------------------------------ cek banyak */
+  /* -------------------------------------------------------- banyak sekaligus */
   var bulkRows = [];
+  var COLS = ['input', 'plat', 'daerah', 'provinsi', 'jenis', 'penggunaan', 'keyakinan', 'status'];
   function csvCell(v) {
     v = String(v == null ? '' : v);
-    // cegah formula injection di Excel/Sheets
-    if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;
+    if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; // cegah formula injection di Excel/Sheets
     return '"' + v.replace(/"/g, '""') + '"';
   }
   $('#bulk-run').addEventListener('click', function () {
     var lines = $('#bulk-input').value.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
-    var max = 500;
-    var truncated = lines.length > max;
+    var max = 500, truncated = lines.length > max;
     lines = lines.slice(0, max);
     bulkRows = lines.map(function (line) {
       var r = P.parsePlate(line, { color: state.color });
-      var wilayah = '';
-      if (r.ok && r.kind === 'reguler') {
-        if (r.regionCandidates && r.regionCandidates.length > 1) wilayah = r.regionCandidates.map(function (x) { return x.name; }).join(' / ') + ' (ambigu)';
-        else if (r.region) wilayah = r.region.name;
-        else if (r.area) wilayah = r.area.province;
-      } else if (r.ok && r.area) wilayah = r.area.title;
-      return {
-        input: line,
-        plat: r.ok ? r.display : '',
-        wilayah: wilayah,
-        provinsi: r.ok && r.area ? r.area.province : '',
-        jenis: r.vehicle ? r.vehicle.label : '',
-        penggunaan: r.usage || '',
-        keyakinan: r.letterInfo ? r.letterInfo.confidence : '',
-        status: r.ok ? 'OK' : r.errors[0]
-      };
+      var daerah = '', prov = '', conf = '';
+      if (r.ok && r.origin) {
+        daerah = r.origin.candidates.map(function (c) { return c.name; }).join(' / ') + (r.origin.candidates.length > 1 ? ' (ambigu)' : '');
+        prov = uniq(r.origin.candidates.map(function (c) { return c.province; })).join(' / ');
+        conf = r.origin.confidence;
+      } else if (r.ok && r.area) {
+        daerah = r.area.title || ''; prov = r.area.province || '';
+      }
+      return { input: line, plat: r.ok ? r.display : '', daerah: daerah, provinsi: prov, jenis: r.vehicle ? r.vehicle.label : '', penggunaan: r.usage || '', keyakinan: conf, status: r.ok ? 'OK' : r.errors[0] };
     });
     var box = $('#bulk-result');
     if (!bulkRows.length) {
-      box.hidden = true;
-      $('#bulk-count').textContent = 'Belum ada plat.';
-      $('#bulk-copy').disabled = $('#bulk-csv').disabled = true;
-      return;
+      box.hidden = true; $('#bulk-count').textContent = 'Belum ada plat.';
+      $('#bulk-copy').disabled = $('#bulk-csv').disabled = true; return;
     }
-    var h = '<table><thead><tr><th>Plat</th><th>Wilayah</th><th>Jenis</th><th>Penggunaan</th><th>Status</th></tr></thead><tbody>';
+    var h = '<table><thead><tr><th>Plat</th><th>Daerah asal</th><th>Provinsi</th><th>Jenis</th><th>Penggunaan</th><th>Status</th></tr></thead><tbody>';
     bulkRows.forEach(function (x) {
-      h += '<tr><td class="mono">' + esc(x.plat || x.input) + '</td><td>' + esc(x.wilayah) + '</td><td>' + esc(x.jenis) + '</td><td>' + esc(x.penggunaan) + '</td><td>' +
-        (x.status === 'OK' ? '<span class="badge ok">OK</span>' : '<span class="badge bad">' + esc(x.status) + '</span>') + '</td></tr>';
+      h += '<tr><td class="mono">' + esc(x.plat || x.input) + '</td><td>' + esc(x.daerah || '—') + '</td><td>' + esc(x.provinsi) + '</td><td>' + esc(x.jenis) + '</td><td>' + esc(x.penggunaan) + '</td><td>' +
+        (x.status === 'OK' ? '<span class="pill ok" style="margin:0">OK</span>' : '<span class="pill bad" style="margin:0">' + esc(x.status) + '</span>') + '</td></tr>';
     });
-    box.innerHTML = h + '</tbody></table>';
-    box.hidden = false;
+    box.innerHTML = h + '</tbody></table>'; box.hidden = false;
     var ok = bulkRows.filter(function (x) { return x.status === 'OK'; }).length;
     $('#bulk-count').textContent = ok + ' valid dari ' + bulkRows.length + ' baris' + (truncated ? ' (dibatasi ' + max + ')' : '');
     $('#bulk-copy').disabled = $('#bulk-csv').disabled = false;
   });
-  var COLS = ['input', 'plat', 'wilayah', 'provinsi', 'jenis', 'penggunaan', 'keyakinan', 'status'];
   $('#bulk-copy').addEventListener('click', function () {
-    var txt = COLS.join('\t') + '\n' + bulkRows.map(function (r) { return COLS.map(function (c) { return r[c]; }).join('\t'); }).join('\n');
-    copy(txt, 'Hasil disalin (tempel ke Excel/Sheets)');
+    copy(COLS.join('\t') + '\n' + bulkRows.map(function (r) { return COLS.map(function (c) { return r[c]; }).join('\t'); }).join('\n'), 'Hasil disalin (tempel ke Excel/Sheets)');
   });
   $('#bulk-csv').addEventListener('click', function () {
     var csv = '﻿' + COLS.join(',') + '\n' + bulkRows.map(function (r) { return COLS.map(function (c) { return csvCell(r[c]); }).join(','); }).join('\n');
@@ -397,66 +419,141 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
   });
 
-  /* ------------------------------------------------------------- referensi */
+  /* ------------------------------------------------------------ peta huruf */
+  var PALETTE = ['#ffc800', '#ff7a59', '#5cc48a', '#6ea8ff', '#d28bf0', '#f2a33a', '#4fd0d0', '#c9a96a', '#ff8fb8', '#b7c0cc'];
   var refDone = false;
+  var atlas = { prefix: 'D', hot: null };
+
+  function atlasHtml() {
+    var prefix = atlas.prefix;
+    var row = D.PREFIXES[prefix];
+    var areas = D.areasOfPrefix(prefix);
+    var idxOf = {};
+    areas.forEach(function (a, i) { idxOf[a.name] = i; });
+
+    var keys = '';
+    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(function (l) {
+      var hit = areas.filter(function (a) { return a.letters.indexOf(l) !== -1; });
+      if (!hit.length) { keys += '<div class="key none" title="' + l + ': tidak tercatat">' + l + '</div>'; return; }
+      var cols = hit.map(function (a) { return PALETTE[idxOf[a.name] % PALETTE.length]; });
+      var bg = cols.length > 1 ? 'repeating-linear-gradient(45deg,' + cols[0] + ' 0 6px,' + cols[1] + ' 6px 12px)' : cols[0];
+      var dim = atlas.hot && hit.every(function (a) { return a.name !== atlas.hot; }) ? ' dim' : '';
+      var hot = atlas.hot && hit.some(function (a) { return a.name === atlas.hot; }) ? ' hot' : '';
+      keys += '<button type="button" class="key' + dim + hot + '" style="--c:' + bg + '" data-letter="' + l + '" aria-label="Huruf ' + l + ': ' + esc(hit.map(function (a) { return a.name; }).join(' atau ')) + '">' + l + '</button>';
+    });
+
+    var list = areas.map(function (a, i) {
+      var amb = a.letters.filter(function (l) { return areas.filter(function (b) { return b.letters.indexOf(l) !== -1; }).length > 1; });
+      return '<button type="button" class="area' + (atlas.hot === a.name ? ' hot' : '') + '" data-area="' + esc(a.name) + '">' +
+        '<i style="--c:' + PALETTE[i % PALETTE.length] + '"></i><span class="an">' + esc(a.name) +
+        '<span class="ap">' + esc(a.province) + (amb.length ? ' &middot; huruf ' + esc(compress(amb)) + ' juga tercatat untuk daerah lain' : '') + '</span></span>' +
+        '<span class="al">' + esc(a.letters.length === 26 ? 'semua' : compress(a.letters)) + '</span></button>';
+    }).join('');
+
+    var body = areas.length
+      ? '<div class="readout" id="readout" aria-live="polite">Kode ' + esc(prefix) + '<small>' + esc(row.province) + '. Sentuh sebuah huruf atau daerah.</small></div>' +
+        '<div class="keys">' + keys + '</div><div class="area-list">' + list + '</div>'
+      : '<div class="readout">Kode ' + esc(prefix) + '<small>' + esc(row.province) + ': ' + esc(row.areas) + '. Rincian huruf seri untuk kode ini belum ada di data aplikasi.</small></div>';
+
+    return '<div class="atlas"><div class="atlas-head"><span>Kode ' + esc(prefix) + '</span><span>' + esc(row.province) + ' &middot; ' + areas.length + ' daerah</span></div><div class="atlas-body">' + body + '</div></div>';
+  }
+
+  function drawAtlas() {
+    $('#atlas').innerHTML = atlasHtml();
+    var sel = $('#prefix-sel'); if (sel) sel.value = atlas.prefix;
+  }
+
+  function readout(html) { var r = $('#readout'); if (r) r.innerHTML = html; }
+
+  function showAtlas(prefix, hot) {
+    atlas.prefix = prefix; atlas.hot = hot || null;
+    drawAtlas();
+    if (hot) {
+      var a = D.areasOfPrefix(prefix).filter(function (x) { return x.name === hot; })[0];
+      if (a) readout(esc(a.name) + '<small>' + esc(a.province) + ' &middot; huruf seri: ' + esc(compress(a.letters)) + '</small>');
+    }
+  }
+
   function renderRef() {
     if (refDone) return;
     refDone = true;
     var h = '';
 
-    // Peta huruf D
-    h += '<div class="card ref-block"><h2>Plat D: wilayah menurut huruf seri</h2>' +
-      '<p>Huruf <b>pertama</b> seri menentukan wilayah. Contoh "D 5002 <b>F</b>A" &rarr; huruf F &rarr; Kota Bandung. Kotak bergaris putus-putus = sumber saling bertentangan.</p><div class="letter-grid">';
-    'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(function (l) {
-      var info = D.LETTER_MAP[l];
-      var reg = D.REGIONS[info.region];
-      var short = { kotaBandung: 'Kota Bdg', cimahi: 'Cimahi', kabBandung: 'Kab. Bdg', kbb: 'KBB' }[info.region];
-      if (info.candidates && info.candidates.length > 1) short = info.candidates.map(function (k) { return { kabBandung: 'Kab. Bdg', kbb: 'KBB' }[k]; }).join(' / ');
-      h += '<div class="lt' + (info.confidence === 'rendah' ? ' low' : '') + '" style="--c:' + reg.color + '" title="' + esc(info.note) + '"><b>' + l + '</b><small>' + esc(short) + '</small></div>';
-    });
-    h += '</div><div class="legend">';
-    Object.keys(D.REGIONS).forEach(function (k) {
-      h += '<span style="--c:' + D.REGIONS[k].color + '"><i></i>' + esc(D.REGIONS[k].name) + '</span>';
-    });
-    h += '<span><i class="dash"></i>Ambigu</span></div></div>';
+    h += '<div class="finder"><label for="find-input" class="field-label">Cari daerah atau kode</label>' +
+      '<input id="find-input" class="txt" type="search" placeholder="mis. Cimahi, Jakarta Selatan, Sleman, DK" autocomplete="off">' +
+      '<div id="found" class="found" aria-live="polite"></div></div>';
 
-    // Samsat
-    h += '<div class="card ref-block"><h2>Kantor Samsat Bandung Raya</h2><p>' + esc(D.SAMSAT_NOTE) + '</p><div class="samsat-list cols">';
+    h += '<div class="pick"><label><span class="field-label">Kode wilayah</span><select id="prefix-sel" class="sel">' +
+      D.PREFIX_ROWS.map(function (r) { return '<option value="' + esc(r[0]) + '">' + esc(r[0]) + ' — ' + esc(r[1]) + '</option>'; }).join('') +
+      '</select></label><p class="muted">Warna tuts menandai daerah. Garis miring dua warna berarti huruf itu tercatat untuk lebih dari satu daerah.</p></div>';
+
+    h += '<div id="atlas"></div>';
+
+    h += '<details class="fold"><summary>Samsat Bandung Raya</summary><div class="fold-body"><p>' + esc(D.SAMSAT_NOTE) + '</p><div class="samsat-grid cols">';
     Object.keys(D.REGIONS).forEach(function (k) {
       D.SAMSAT[k].forEach(function (s) {
         h += '<div class="samsat"><div class="tag">' + esc(D.REGIONS[k].name) + '</div><div class="name">' + esc(s.name) + '</div><div class="meta">' + esc(s.address) + '</div><div class="meta">' + esc(s.phone) + '</div></div>';
       });
     });
-    h += '</div></div>';
+    h += '</div></div></details>';
 
-    // Rentang nomor
-    h += '<div class="card ref-block"><h2>Rentang nomor &amp; jenis kendaraan</h2><p>' + esc(D.NUMBER_NOTE) + '</p><div class="table-wrap" style="margin:0"><table><thead><tr><th>Nomor</th><th>Jenis</th></tr></thead><tbody>';
-    D.NUMBER_RANGES.forEach(function (r) { h += '<tr><td class="mono">' + r.from + ' - ' + r.to + '</td><td>' + esc(r.label) + '</td></tr>'; });
-    h += '</tbody></table></div></div>';
+    h += '<details class="fold"><summary>Rentang nomor dan jenis kendaraan</summary><div class="fold-body"><p>' + esc(D.NUMBER_NOTE) + '</p><div class="table-wrap" style="margin:0;box-shadow:none"><table><thead><tr><th>Nomor</th><th>Jenis</th></tr></thead><tbody>' +
+      D.NUMBER_RANGES.map(function (r) { return '<tr><td class="mono">' + r.from + ' – ' + r.to + '</td><td>' + esc(r.label) + '</td></tr>'; }).join('') + '</tbody></table></div></div></details>';
 
-    // Warna
-    h += '<div class="card ref-block"><h2>Warna plat</h2><div class="samsat-list cols">';
-    Object.keys(D.COLORS).forEach(function (k) {
-      var c = D.COLORS[k];
-      h += '<div class="samsat"><div style="display:flex;gap:12px;align-items:center"><span class="plate" style="--plate-bg:' + c.bg + ';--plate-fg:' + c.fg + ';min-width:0;padding:2px 10px;border-width:2px;font-weight:800;font-family:var(--mono)">D 1</span>' +
-        '<div><div class="name">' + esc(c.usage) + '</div><div class="meta">' + esc(c.label) + '</div></div></div><div class="meta">' + esc(c.detail) + '</div></div>';
-    });
-    h += '</div></div>';
+    h += '<details class="fold"><summary>Warna plat</summary><div class="fold-body"><div class="samsat-grid cols">' +
+      Object.keys(D.COLORS).map(function (k) {
+        var c = D.COLORS[k];
+        return '<div class="color-card"><div><span class="mini-plate" style="--pb:' + c.bg + ';--pf:' + c.fg + '">D 1234</span></div><div class="name" style="font:800 1.2rem/1 var(--f-display);text-transform:uppercase">' + esc(c.usage) + '</div><div class="meta" style="font-size:.9rem;color:var(--ink-2)">' + esc(c.detail) + '</div></div>';
+      }).join('') + '</div></div></details>';
 
-    // Kode khusus
-    h += '<div class="card ref-block"><h2>Kode khusus</h2><div class="samsat-list cols">';
-    D.SPECIAL_CODES.forEach(function (c) {
-      h += '<div class="samsat"><div class="name mono">' + esc(c.code) + '</div><div class="tag">' + esc(c.title) + '</div><div class="meta">' + esc(c.text) + '</div></div>';
-    });
-    h += '</div></div>';
+    h += '<details class="fold"><summary>Kode khusus</summary><div class="fold-body"><div class="samsat-grid cols">' +
+      D.SPECIAL_CODES.map(function (c) { return '<div class="samsat"><div class="name">' + esc(c.code) + '</div><div class="tag">' + esc(c.title) + '</div><div class="meta">' + esc(c.text) + '</div></div>'; }).join('') + '</div></div></details>';
 
-    // Semua kode wilayah
-    h += '<div class="card ref-block"><h2>Seluruh kode wilayah (' + D.PREFIX_ROWS.length + ')</h2>' +
-      '<input id="prefix-filter" class="text-input filter" type="search" placeholder="Cari kode atau daerah, mis. Bali, DK, Surabaya" style="font-family:var(--font)">' +
-      '<div class="table-wrap" style="margin:0"><table><thead><tr><th>Kode</th><th>Provinsi</th><th>Cakupan</th></tr></thead><tbody id="prefix-body"></tbody></table></div></div>';
+    h += '<details class="fold"><summary>Semua kode wilayah (' + D.PREFIX_ROWS.length + ')</summary><div class="fold-body">' +
+      '<input id="prefix-filter" class="txt" type="search" placeholder="Saring: kode, provinsi, atau daerah"><div class="table-wrap" style="margin:0;box-shadow:none"><table><thead><tr><th>Kode</th><th>Provinsi</th><th>Cakupan</th></tr></thead><tbody id="prefix-body"></tbody></table></div></div></details>';
 
     $('#ref-content').innerHTML = h;
+    drawAtlas();
 
+    // pilih kode
+    $('#prefix-sel').addEventListener('change', function () { showAtlas(this.value); });
+
+    // interaksi atlas (delegasi)
+    $('#atlas').addEventListener('click', function (e) {
+      var k = e.target.closest('[data-letter]');
+      var a = e.target.closest('[data-area]');
+      if (k) {
+        var l = k.getAttribute('data-letter');
+        var o = D.lookupOrigin(atlas.prefix, l);
+        if (o) {
+          atlas.hot = o.candidates[0].name;
+          drawAtlas();
+          readout('Huruf ' + esc(l) + ' &rarr; ' + esc(o.candidates.map(function (c) { return c.name; }).join(' atau ')) +
+            '<small>' + esc(o.candidates[0].province) + (o.confidence === 'tinggi' ? '' : ' &middot; keyakinan ' + esc(o.confidence)) + '</small>');
+        }
+      } else if (a) {
+        showAtlas(atlas.prefix, a.getAttribute('data-area'));
+      }
+    });
+
+    // cari balik
+    $('#find-input').addEventListener('input', function () {
+      var res = D.searchAreas(this.value, 30);
+      $('#found').innerHTML = res.map(function (a, i) {
+        return '<button type="button" class="found-row" data-fi="' + i + '"><span class="pf">' + esc(a.prefix) + '</span><span class="fn">' + esc(a.name) +
+          '</span><span class="fm">' + esc(a.province) + ' &middot; huruf seri <b>' + esc(a.letters.length === 26 ? 'semua' : compress(a.letters)) + '</b></span></button>';
+      }).join('') || (this.value.trim() ? '<p class="muted">Tidak ada yang cocok.</p>' : '');
+      $('#found').__res = res;
+    });
+    $('#found').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-fi]');
+      if (!b) return;
+      var a = this.__res[Number(b.getAttribute('data-fi'))];
+      showAtlas(a.prefix, a.name);
+      $('#atlas').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // tabel semua kode
     function fill(q) {
       q = (q || '').toLowerCase().trim();
       var rows = D.PREFIX_ROWS.filter(function (r) { return !q || (r[0] + ' ' + r[1] + ' ' + r[2]).toLowerCase().indexOf(q) !== -1; });
@@ -468,7 +565,7 @@
     $('#prefix-filter').addEventListener('input', function () { fill(this.value); });
   }
 
-  /* ---------------------------------------------------------------- tentang */
+  /* --------------------------------------------------------------- akurasi */
   var infoDone = false;
   function renderInfo() {
     if (infoDone) return;
@@ -476,53 +573,39 @@
     var srcs = Object.keys(D.SOURCES).map(function (k) {
       return '<li><a href="' + esc(D.SOURCES[k].url) + '" target="_blank" rel="noopener noreferrer">' + esc(D.SOURCES[k].title) + '</a></li>';
     }).join('');
-    $('#info-content').innerHTML =
-      '<div class="card prose">' +
-      '<h2>Seberapa akurat?</h2>' +
-      '<p>Tidak ada API resmi Polri atau Samsat untuk pembagian huruf seri plat. Aplikasi ini memakai data publik, dan setiap hasil diberi tingkat keyakinan:</p>' +
-      '<ul>' +
-      '<li><span class="badge ok">Tinggi</span> Seluruh sumber yang dibandingkan sepakat. Contoh: huruf A-R = Kota Bandung, U dan X = Bandung Barat.</li>' +
-      '<li><span class="badge mid">Sedang</span> Mayoritas sumber sepakat, satu sumber berbeda. Contoh: S/T = Cimahi, V/Y = Kabupaten Bandung.</li>' +
-      '<li><span class="badge warn">Ambigu</span> Sumber saling bertentangan, jadi aplikasi menampilkan semua kandidat. Contoh: huruf W dan Z.</li>' +
-      '</ul>' +
-      '<h2>Apa yang tidak bisa diketahui dari plat?</h2>' +
-      '<ul>' +
-      '<li><b>Kantor Samsat asal.</b> Plat tidak memuat kantor tertentu. Yang ditampilkan adalah kantor Samsat yang melayani wilayah tersebut.</li>' +
-      '<li><b>Pribadi atau umum.</b> Ditentukan oleh warna plat, bukan angka/huruf. Pilih warna di Opsi tambahan.</li>' +
-      '<li><b>Jenis kendaraan.</b> Berdasarkan rentang nomor awal. Nomor bisa dipakai ulang dengan seri berbeda, jadi sifatnya indikatif.</li>' +
-      '<li><b>Pemilik, merek, tipe, dan status pajak.</b> Tidak tersedia secara publik. Untuk pajak, gunakan kanal resmi Bapenda Jawa Barat.</li>' +
-      '</ul>' +
-      '<h2>Privasi</h2>' +
-      '<p>Semua pemrosesan berjalan di perangkat Anda. Tidak ada plat yang dikirim ke server. Riwayat disimpan lokal di browser dan bisa dihapus kapan saja.</p>' +
-      '<h2>Sumber data</h2><ul class="src-list">' + srcs + '</ul>' +
-      '</div>';
+    $('#info-content').innerHTML = '<div class="prose">' +
+      '<p>Tidak ada API atau dokumen resmi Polri maupun Samsat yang menerbitkan pembagian huruf seri plat. Aplikasi ini memakai tabel publik, dan <b>setiap hasil diberi cap tingkat keyakinan</b> supaya Anda tahu seberapa kuat dasarnya.</p>' +
+      '<div><div class="legend-row"><div class="stamp tinggi">Keyakinan tinggi</div><p>Dua sumber atau lebih yang memuat tabel rinci sepakat. Contoh: plat B (Jakarta, Bekasi, Depok, Tangerang), plat H (Semarang), huruf A–R plat D untuk Kota Bandung.</p></div>' +
+      '<div class="legend-row"><div class="stamp sedang">Keyakinan sedang</div><p>Hanya satu tabel rinci yang tersedia tanpa pembanding independen, atau mayoritas sumber sepakat dengan satu sumber berbeda (contoh: S/T dan V/Y di plat D). Kemungkinan besar benar, tetapi belum diverifikasi silang.</p></div>' +
+      '<div class="legend-row"><div class="stamp rendah">Ambigu</div><p>Sumber saling bertentangan atau satu huruf tercatat untuk beberapa daerah (contoh: huruf W dan Z plat D). Aplikasi menampilkan semua kandidat, bukan menebak.</p></div>' +
+      '<div class="legend-row"><div class="stamp netral">Tingkat provinsi</div><p>Hanya provinsi yang bisa ditentukan: rincian huruf seri untuk kode itu belum ada, atau huruf tersebut tidak tercatat di tabel.</p></div></div>' +
+      '<h2>Yang tidak bisa dibaca dari plat</h2><ul>' +
+      '<li><b>Kantor Samsat spesifik.</b> Plat tidak memuatnya. Alamat Samsat baru tersedia untuk Bandung Raya, dari artikel 2017 dan 2021, jadi cek ulang sebelum berkunjung.</li>' +
+      '<li><b>Pribadi atau umum.</b> Ditentukan warna plat, bukan angka atau huruf.</li>' +
+      '<li><b>Jenis kendaraan.</b> Berdasarkan rentang nomor awal; nomor bisa dipakai ulang dengan seri lain, jadi sifatnya indikatif.</li>' +
+      '<li><b>Pemilik, merek, tipe, dan status pajak.</b> Tidak tersedia secara publik. Untuk pajak, pakai kanal resmi Bapenda provinsi.</li>' +
+      '<li><b>Pemekaran dan perubahan.</b> Daerah baru atau perubahan pembagian huruf bisa belum tercermin di tabel sumber. Kepulauan Seribu dan Kalimantan Utara belum punya data rinci.</li></ul>' +
+      '<h2>Privasi</h2><p>Semua pemrosesan terjadi di perangkat Anda. Tidak ada plat yang dikirim ke server. Riwayat tersimpan lokal di browser dan bisa dihapus kapan saja.</p>' +
+      '<h2>Sumber data</h2><ul class="src-list">' + srcs + '</ul></div>';
   }
 
-  /* ------------------------------------------------------------- shortcut */
+  /* -------------------------------------------------------------- pintasan */
   document.addEventListener('keydown', function (e) {
-    if (e.key === '/' && !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)) {
-      e.preventDefault();
-      showTab('cek');
-      $('#plate-input').focus();
+    if (e.key === '/' && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) {
+      e.preventDefault(); showTab('cek'); $('#plate-input').focus();
     }
   });
 
-  /* ------------------------------------------------------------------- init */
-  renderColorChips();
+  /* ------------------------------------------------------------------ init */
+  renderSwatches();
   renderHistory();
 
   var qp = new URL(location.href).searchParams.get('plat');
   var tab = location.hash.replace('#', '');
   if (['cek', 'banyak', 'ref', 'info'].indexOf(tab) > -1) showTab(tab);
-  if (qp) {
-    $('#plate-input').value = qp.slice(0, 14);
-    runSearch(false);
-  }
+  if (qp) { $('#plate-input').value = qp.slice(0, 14); runSearch(false, false); }
 
-  /* ----------------------------------------------------------- service worker */
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    window.addEventListener('load', function () {
-      navigator.serviceWorker.register('sw.js').catch(function () {});
-    });
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
   }
 })();

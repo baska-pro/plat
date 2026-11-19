@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parsePlate, parseExpiry, summarize } = require('../js/parser.js');
 const Data = require('../js/data.js');
+const Series = require('../js/series.js');
 
 /* ---------------------------------------------------------- Kasus utama */
 test('D 5002 FA -> Kota Bandung, sepeda motor', () => {
@@ -229,7 +230,7 @@ test('masa berlaku tidak valid memberi peringatan', () => {
 test('summarize', () => {
   assert.equal(
     summarize(parsePlate('D 5002 FA', { color: 'putih' })),
-    'Kota Bandung - Sepeda motor - Pribadi'
+    'Kota Bandung, Jawa Barat - Sepeda motor - Pribadi'
   );
   assert.match(summarize(parsePlate('D 1000 WA')), /ambigu/);
   assert.match(summarize(parsePlate('')), /Masukkan/);
@@ -251,4 +252,120 @@ test('semua rujukan sumber valid', () => {
   for (const c of Object.values(Data.COLORS)) assert.ok(Data.SOURCES[c.source], c.key);
   for (const c of Data.SPECIAL_CODES) assert.ok(Data.SOURCES[c.source], c.code);
   for (const s of Object.values(Data.SOURCES)) assert.match(s.url, /^https:\/\//);
+});
+
+/* ============================================================ Huruf seri semua kode */
+const origin = (plate) => parsePlate(plate).origin;
+const names = (plate) => origin(plate).candidates.map((c) => c.name);
+
+test('plat B: huruf pertama seri menentukan kota/kabupaten', () => {
+  const cases = {
+    'B 1234 BKA': 'Kota Adm. Jakarta Barat',
+    'B 1234 PKA': 'Kota Adm. Jakarta Pusat',
+    'B 1234 SKA': 'Kota Adm. Jakarta Selatan',
+    'B 1234 TKA': 'Kota Adm. Jakarta Timur',
+    'B 1234 UKA': 'Kota Adm. Jakarta Utara',
+    'B 1234 KKA': 'Kota Bekasi',
+    'B 1234 FKA': 'Kabupaten Bekasi',
+    'B 1234 EKA': 'Kota Depok',
+    'B 1234 ZKA': 'Kota Depok',
+    'B 1234 CKA': 'Kota Tangerang',
+    'B 1234 VKA': 'Kota Tangerang',
+    'B 1234 WKA': 'Kota Tangerang Selatan',
+    'B 1234 GKA': 'Kabupaten Tangerang',
+    'B 1234 NKA': 'Kabupaten Tangerang'
+  };
+  for (const [plate, area] of Object.entries(cases)) {
+    assert.deepEqual(names(plate), [area], plate);
+    assert.equal(origin(plate).confidence, 'tinggi', plate);
+  }
+});
+
+test('plat B: provinsi mengikuti daerah, bukan kode (Bekasi=Jabar, Tangerang=Banten)', () => {
+  assert.equal(origin('B 1 SA').candidates[0].province, 'DKI Jakarta');
+  assert.equal(origin('B 1 KA').candidates[0].province, 'Jawa Barat');
+  assert.equal(origin('B 1 EA').candidates[0].province, 'Jawa Barat');
+  assert.equal(origin('B 1 WA').candidates[0].province, 'Banten');
+});
+
+test('plat B: huruf yang tidak ada di tabel -> peringatan, bukan tebakan', () => {
+  const r = parsePlate('B 1234 QKA'); // Q tidak dipakai di tabel B
+  assert.equal(r.ok, true);
+  assert.equal(r.origin, null);
+  assert.ok(r.warnings.some((w) => /Q/.test(w)));
+});
+
+test('H, AB, E, F, Z, DK: contoh daerah', () => {
+  assert.deepEqual(names('H 1234 AB'), ['Kota Semarang']);
+  assert.deepEqual(names('H 1234 DB'), ['Kabupaten Kendal']);
+  assert.equal(origin('H 1234 AB').confidence, 'tinggi');
+  assert.deepEqual(names('AB 1234 EA'), ['Kabupaten Sleman']);
+  assert.deepEqual(names('E 1234 AA'), ['Kota Cirebon']);
+  assert.deepEqual(names('F 1234 FA'), ['Kabupaten Bogor']);
+  assert.deepEqual(names('Z 1234 DA'), ['Kabupaten Garut']);
+  assert.deepEqual(names('DK 1234 AA'), ['Kota Denpasar']);
+  assert.deepEqual(names('BK 1234 AA'), ['Kota Medan']);
+  assert.deepEqual(names('KT 1234 BA'), ['Kota Samarinda']);
+});
+
+test('huruf yang tercatat untuk >1 daerah ditandai ambigu', () => {
+  const t = origin('T 1234 TA'); // T-Z: Subang atau Bekasi (sebagian)
+  assert.equal(t.confidence, 'rendah');
+  assert.equal(t.candidates.length, 2);
+  const bm = origin('BM 1234 XA'); // X: Kuantan Singingi atau Kep. Meranti
+  assert.equal(bm.confidence, 'rendah');
+  assert.equal(bm.candidates.length, 2);
+});
+
+test('kode L selalu Kota Surabaya', () => {
+  assert.deepEqual(names('L 1234 AB'), ['Kota Surabaya']);
+  assert.deepEqual(names('L 1234 ZZ'), ['Kota Surabaya']);
+});
+
+test('kode tanpa rincian (KU) tetap ok tanpa origin', () => {
+  const r = parsePlate('KU 1234 AB');
+  assert.equal(r.ok, true);
+  assert.equal(r.origin, null);
+  assert.equal(r.area.province, 'Kalimantan Utara');
+});
+
+test('plat D lewat jalur origin: kandidat & Samsat konsisten', () => {
+  const f = origin('D 5002 FA');
+  assert.deepEqual(f.candidates.map((c) => c.name), ['Kota Bandung']);
+  assert.ok(f.candidates[0].letters.includes('F'));
+  const w = origin('D 1000 WA');
+  assert.equal(w.candidates.length, 2);
+  assert.equal(w.confidence, 'rendah');
+});
+
+test('integritas tabel seri', () => {
+  for (const [prefix, rows] of Object.entries(Series.RAW)) {
+    assert.ok(Data.PREFIXES[prefix], 'kode tidak dikenal: ' + prefix);
+    const seen = new Set();
+    for (const [name, letters] of rows) {
+      assert.ok(name && letters, prefix);
+      assert.match(letters, /^[A-Z]+$/, prefix + ' ' + name);
+      assert.equal(new Set(letters).size, letters.length, 'huruf ganda di ' + prefix + ' ' + name);
+      assert.ok(!seen.has(name), 'nama ganda ' + prefix + ' ' + name);
+      seen.add(name);
+    }
+  }
+  // 54 dari 55 kode punya rincian (D lewat LETTER_MAP, L lewat WHOLE, KU belum ada data)
+  const detailed = Data.PREFIX_ROWS.filter(([c]) => Data.hasDetail(c)).map(([c]) => c);
+  assert.equal(detailed.length, Data.PREFIX_ROWS.length - 1);
+  assert.ok(!detailed.includes('KU'));
+});
+
+test('pencarian balik: daerah -> kode + huruf', () => {
+  const cimahi = Data.searchAreas('cimahi');
+  assert.ok(cimahi.some((a) => a.prefix === 'D' && a.letters.includes('S')));
+  const jaksel = Data.searchAreas('jakarta selatan');
+  assert.deepEqual(jaksel.map((a) => [a.prefix, a.letters.join('')]), [['B', 'S']]);
+  const bali = Data.searchAreas('DK');
+  assert.equal(bali.length, 9);
+  assert.deepEqual(Data.searchAreas(''), []);
+});
+
+test('ringkasan menyebut daerah spesifik', () => {
+  assert.equal(summarize(parsePlate('B 1234 SKA')), 'Kota Adm. Jakarta Selatan, DKI Jakarta - Mobil penumpang');
 });

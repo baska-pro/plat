@@ -63,6 +63,7 @@
       number: null,
       series: '',
       area: null,
+      origin: null,
       region: null,
       letterInfo: null,
       vehicle: null,
@@ -194,7 +195,19 @@
       out.notes.push('Seri ZZ dilaporkan dipakai plat dinas pejabat sejak Oktober 2023 (sumber: Wikipedia, perlu diverifikasi).');
     }
 
-    // ---- Sub-wilayah khusus plat D (Bandung Raya)
+    // ---- Asal daerah dari huruf pertama seri (semua kode yang punya rincian)
+    if (Data.hasDetail(prefix)) {
+      if (series) {
+        var org = Data.lookupOrigin(prefix, series.charAt(0));
+        if (org) out.origin = org;
+        else out.warnings.push('Huruf seri "' + series.charAt(0) + '" belum tercatat di tabel kode ' + prefix +
+          '. Daerah asal tidak bisa ditentukan, hanya provinsinya.');
+      } else if (prefix !== 'D' && Data.SERIES_INDEX[prefix]) {
+        out.warnings.push('Tanpa huruf seri, daerah asal di dalam kode ' + prefix + ' tidak bisa ditentukan.');
+      }
+    }
+
+    // ---- Sub-wilayah khusus plat D (Bandung Raya): Samsat
     if (prefix === 'D' && series) {
       var first = series.charAt(0);
       var info = Data.LETTER_MAP[first];
@@ -245,7 +258,11 @@
     if (!r.ok) return r.errors[0] || '';
     if (r.kind !== 'reguler') return (r.area && r.area.title) || r.kind;
     var parts = [];
-    if (r.region) {
+    if (r.origin) {
+      var names = r.origin.candidates.map(function (c) { return c.name; }).join(' / ');
+      parts.push(names + (r.origin.candidates.length > 1 ? ' (ambigu)' : '') +
+        (r.origin.candidates[0].province ? ', ' + r.origin.candidates[0].province : ''));
+    } else if (r.region) {
       parts.push(r.regionCandidates && r.regionCandidates.length > 1
         ? r.regionCandidates.map(function (x) { return x.name; }).join(' / ') + ' (ambigu)'
         : r.region.name);
