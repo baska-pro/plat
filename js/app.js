@@ -480,7 +480,7 @@
     var h = '';
 
     h += '<div class="finder"><label for="find-input" class="field-label">Cari daerah atau kode</label>' +
-      '<input id="find-input" class="txt" type="search" placeholder="mis. Cimahi, Jakarta Selatan, Sleman, DK" autocomplete="off">' +
+      '<input id="find-input" class="txt" type="search" placeholder="mis. Cimahi atau Jakarta Selatan" autocomplete="off">' +
       '<div id="found" class="found" aria-live="polite"></div></div>';
 
     h += '<div class="pick"><label><span class="field-label">Kode wilayah</span><select id="prefix-sel" class="sel">' +

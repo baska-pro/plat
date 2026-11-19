@@ -36,10 +36,10 @@
     <div class="hazard" aria-hidden="true"></div>
     <div class="wrap">
       <nav class="tabs" role="tablist" aria-label="Menu utama">
-        <button class="tab is-active" role="tab" id="tab-cek" aria-controls="panel-cek" aria-selected="true" data-tab="cek">Cek plat</button>
-        <button class="tab" role="tab" id="tab-banyak" aria-controls="panel-banyak" aria-selected="false" data-tab="banyak" tabindex="-1">Banyak sekaligus</button>
-        <button class="tab" role="tab" id="tab-ref" aria-controls="panel-ref" aria-selected="false" data-tab="ref" tabindex="-1">Peta huruf</button>
-        <button class="tab" role="tab" id="tab-info" aria-controls="panel-info" aria-selected="false" data-tab="info" tabindex="-1">Soal akurasi</button>
+        <button class="tab is-active" role="tab" id="tab-cek" aria-controls="panel-cek" aria-selected="true" data-tab="cek"><span class="l">Cek plat</span><span class="s">Cek plat</span></button>
+        <button class="tab" role="tab" id="tab-banyak" aria-controls="panel-banyak" aria-selected="false" data-tab="banyak" tabindex="-1"><span class="l">Banyak sekaligus</span><span class="s">Banyak</span></button>
+        <button class="tab" role="tab" id="tab-ref" aria-controls="panel-ref" aria-selected="false" data-tab="ref" tabindex="-1"><span class="l">Peta huruf</span><span class="s">Peta</span></button>
+        <button class="tab" role="tab" id="tab-info" aria-controls="panel-info" aria-selected="false" data-tab="info" tabindex="-1"><span class="l">Soal akurasi</span><span class="s">Akurasi</span></button>
       </nav>
     </div>
   </header>
@@ -77,12 +77,14 @@
       </form>
 
       <p id="plate-hint" class="hint" role="status" aria-live="polite">
-        Coba:
-        <button type="button" class="ex" data-example="B 1234 SKA">B 1234 SKA</button>
-        <button type="button" class="ex" data-example="D 5002 FA">D 5002 FA</button>
-        <button type="button" class="ex" data-example="H 4821 AB">H 4821 AB</button>
-        <button type="button" class="ex" data-example="AB 3456 EA">AB 3456 EA</button>
-        <button type="button" class="ex" data-example="D 1234 WA">D 1234 WA</button>
+        <span>Coba:</span>
+        <span class="ex-row">
+          <button type="button" class="ex" data-example="B 1234 SKA">B 1234 SKA</button>
+          <button type="button" class="ex" data-example="D 5002 FA">D 5002 FA</button>
+          <button type="button" class="ex" data-example="H 4821 AB">H 4821 AB</button>
+          <button type="button" class="ex" data-example="AB 3456 EA">AB 3456 EA</button>
+          <button type="button" class="ex" data-example="D 1234 WA">D 1234 WA</button>
+        </span>
       </p>
 
       <div id="history-wrap" class="history" hidden>
