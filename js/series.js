@@ -7,8 +7,9 @@
  * (diverifikasi untuk plat H lewat Auto2000; tanda * di tabel Moladin hanyalah
  *  artefak format.)
  *
- * Sumber tabel: Moladin "300+ Kode Plat Nomor Belakang" (semua kode),
- * dibandingkan dengan Auto2000 (B, H), detikOto (K, D) dan GetAndRide (A, B, D, E, F, T, Z).
+ * Sumber tabel: Moladin "300+ Kode Plat Nomor Belakang" (semua kode); KU, DP, DW dari
+ * Daihatsu dan detikOto. Hasil perbandingan dengan penerbit lain (tingkat keyakinan,
+ * tanggal cek, huruf yang diperdebatkan) ada di verify.js, bukan di sini.
  * Plat D ditangani terpisah di data.js karena sumbernya saling bertentangan.
  *
  * Format baris: [nama daerah, huruf-huruf, provinsi (opsional, menimpa default kode)]
@@ -202,7 +203,8 @@
       ['Kota Mataram', 'ABCDE'],
       ['Kabupaten Lombok Barat', 'HJK'],
       ['Kabupaten Lombok Timur', 'L'],
-      ['Kabupaten Lombok Tengah', 'S']
+      ['Kabupaten Lombok Tengah', 'S'],
+      ['Kabupaten Lombok Utara', 'RT']
     ],
     EA: [
       ['Kabupaten Sumbawa', 'A'],
@@ -292,6 +294,13 @@
       ['Kabupaten Kutai Timur', 'R'],
       ['Kabupaten Penajam Paser Utara', 'V']
     ],
+    KU: [
+      ['Kabupaten Bulungan', 'AB'],
+      ['Kota Tarakan', 'G'],
+      ['Kabupaten Tana Tidung', 'H'],
+      ['Kabupaten Nunukan', 'N'],
+      ['Kabupaten Malinau', 'S']
+    ],
 
     /* ----------------------------------------------------------------------------- Sulawesi */
     DB: [
@@ -358,6 +367,25 @@
       ['Kabupaten Jeneponto', 'G'],
       ['Kabupaten Bulukumba', 'H'],
       ['Kabupaten Selayar', 'J']
+    ],
+    DP: [
+      ['Kota Parepare', 'A'],
+      ['Kabupaten Barru', 'B'],
+      ['Kabupaten Sidenreng Rappang', 'CM'],
+      ['Kabupaten Pinrang', 'DR'],
+      ['Kota Palopo', 'E'],
+      ['Kabupaten Luwu', 'F'],
+      ['Kabupaten Luwu Timur', 'G'],
+      ['Kabupaten Luwu Utara', 'H'],
+      ['Kabupaten Enrekang', 'I'],
+      ['Kabupaten Tana Toraja', 'J'],
+      ['Kabupaten Toraja Utara', 'K']
+    ],
+    DW: [
+      ['Kabupaten Bone', 'A'],
+      ['Kabupaten Wajo', 'B'],
+      ['Kabupaten Soppeng', 'CY'],
+      ['Kabupaten Sinjai', 'DZ']
     ],
     DC: [
       ['Kabupaten Mamuju', 'A'],
@@ -597,22 +625,5 @@
     L: { name: 'Kota Surabaya', note: 'Kode L hanya dipakai Kota Surabaya, jadi huruf seri tidak membedakan daerah.', conf: 'tinggi' }
   };
 
-  /*
-   * Tingkat keyakinan per kode wilayah.
-   *   tinggi : >= 2 sumber yang memuat tabel rinci sepakat
-   *   sedang : satu tabel rinci tanpa pembanding independen
-   * Huruf yang tercatat untuk >1 daerah otomatis diturunkan menjadi "rendah".
-   */
-  var META = {
-    B: { conf: 'tinggi', note: 'Moladin dan Auto2000 sepakat. Kepulauan Seribu tidak tercantum di kedua sumber.', src: ['moladin', 'auto2000Jkt'] },
-    H: { conf: 'tinggi', note: 'Moladin dan Auto2000 sepakat.', src: ['moladin', 'auto2000H'] },
-    K: { conf: 'sedang', note: 'Moladin; sebagian (Pati, Blora) cocok dengan detikOto.', src: ['moladin', 'detikSuffix'] }
-  };
-  var DEFAULT_META = {
-    conf: 'sedang',
-    note: 'Berasal dari satu tabel publik (Moladin) dan belum ada pembanding independen.',
-    src: ['moladin']
-  };
-
-  return { RAW: RAW, WHOLE: WHOLE, META: META, DEFAULT_META: DEFAULT_META, ALL: ALL };
+  return { RAW: RAW, WHOLE: WHOLE, ALL: ALL };
 });

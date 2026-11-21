@@ -157,7 +157,7 @@ test('plat luar Bandung: provinsi tampil, tanpa sub-wilayah D', () => {
 });
 
 test('seluruh kode wilayah punya data lengkap', () => {
-  assert.equal(Data.PREFIX_ROWS.length, 55);
+  assert.equal(Data.PREFIX_ROWS.length, 60);
   const seen = new Set();
   for (const [code, prov, areas] of Data.PREFIX_ROWS) {
     assert.match(code, /^[A-Z]{1,2}$/);
@@ -322,11 +322,11 @@ test('kode L selalu Kota Surabaya', () => {
   assert.deepEqual(names('L 1234 ZZ'), ['Kota Surabaya']);
 });
 
-test('kode tanpa rincian (KU) tetap ok tanpa origin', () => {
-  const r = parsePlate('KU 1234 AB');
+test('kode tanpa rincian (PS, kode baru 2024) tetap ok tanpa origin', () => {
+  const r = parsePlate('PS 1234 AB');
   assert.equal(r.ok, true);
   assert.equal(r.origin, null);
-  assert.equal(r.area.province, 'Kalimantan Utara');
+  assert.equal(r.area.province, 'Papua Selatan');
 });
 
 test('plat D lewat jalur origin: kandidat & Samsat konsisten', () => {
@@ -350,10 +350,11 @@ test('integritas tabel seri', () => {
       seen.add(name);
     }
   }
-  // 54 dari 55 kode punya rincian (D lewat LETTER_MAP, L lewat WHOLE, KU belum ada data)
+  // 57 dari 60 kode punya rincian; PS, PT, PY (kode baru 2024) baru tingkat provinsi
   const detailed = Data.PREFIX_ROWS.filter(([c]) => Data.hasDetail(c)).map(([c]) => c);
-  assert.equal(detailed.length, Data.PREFIX_ROWS.length - 1);
-  assert.ok(!detailed.includes('KU'));
+  assert.equal(detailed.length, Data.PREFIX_ROWS.length - 3);
+  for (const c of ['PS', 'PT', 'PY']) assert.ok(!detailed.includes(c), c);
+  for (const c of ['KU', 'DP', 'DW']) assert.ok(detailed.includes(c), c);
 });
 
 test('pencarian balik: daerah -> kode + huruf', () => {
@@ -368,4 +369,108 @@ test('pencarian balik: daerah -> kode + huruf', () => {
 
 test('ringkasan menyebut daerah spesifik', () => {
   assert.equal(summarize(parsePlate('B 1234 SKA')), 'Kota Adm. Jakarta Selatan, DKI Jakarta - Mobil penumpang');
+});
+
+/* ============================================================ Verifikasi silang */
+const Verify = require('../js/verify.js');
+
+test('KU, DP, DW sekarang punya rincian huruf', () => {
+  assert.deepEqual(names('KU 1234 GA'), ['Kota Tarakan']);
+  assert.deepEqual(names('KU 1234 AB'), ['Kabupaten Bulungan']);
+  assert.deepEqual(names('KU 1234 SA'), ['Kabupaten Malinau']);
+  assert.equal(origin('KU 1234 GA').confidence, 'sedang'); // satu sumber
+  assert.deepEqual(names('DP 1234 AA'), ['Kota Parepare']);
+  assert.deepEqual(names('DW 1234 YA'), ['Kabupaten Soppeng']);
+});
+
+test('setiap hasil membawa tanggal cek, status, dan rujukan', () => {
+  for (const [plate, status] of [['B 1234 SKA', 'cocok'], ['N 1234 LA', 'konflik'], ['KU 1234 GA', 'tanpa-pembanding'], ['D 5002 FA', 'cocok']]) {
+    const o = origin(plate);
+    assert.match(o.checked, /^\d{4}-\d{2}-\d{2}$/, plate);
+    assert.equal(o.status, status, plate);
+    assert.ok(Array.isArray(o.refs), plate);
+  }
+  assert.ok(origin('B 1234 SKA').refs.length > 0);
+});
+
+test('plat N: huruf yang diperdebatkan jadi ambigu dengan dua kandidat', () => {
+  assert.deepEqual(names('N 1234 LA'), ['Kota Batu', 'Kabupaten Probolinggo']);
+  assert.equal(origin('N 1234 LA').confidence, 'rendah');
+  assert.deepEqual(names('N 1234 UA'), ['Kabupaten Lumajang', 'Kabupaten Pasuruan']);
+  // huruf yang kedua versi sepakati tidak berubah
+  assert.deepEqual(names('N 1234 AA'), ['Kota Malang']);
+  assert.notEqual(origin('N 1234 AA').confidence, 'rendah');
+});
+
+test('EA: huruf yang tidak ada di tabel utama tetapi ada di halaman Moladin EA ditandai ambigu', () => {
+  const o = origin('EA 1234 FA');
+  assert.deepEqual(o.candidates.map((c) => c.name), ['Kabupaten Dompu']);
+  assert.equal(o.confidence, 'rendah');
+});
+
+test('BB dan BH: huruf yang ditukar pembanding ditandai ambigu', () => {
+  assert.deepEqual(names('BB 1234 MA'), ['Kota Sibolga', 'Kabupaten Tapanuli Tengah']);
+  assert.deepEqual(names('BH 1234 HA'), ['Kabupaten Muaro Jambi', 'Kota Jambi']);
+});
+
+test('Papua: PA/PB lama diberi catatan pemekaran, kode baru dikenali', () => {
+  assert.match(origin('PA 1234 GA').note, /PS|PT/);
+  assert.equal(origin('PA 1234 GA').confidence, 'sedang');
+  assert.match(origin('PB 1234 SA').note, /PY/);
+  for (const c of ['PS', 'PT', 'PY']) assert.ok(Data.PREFIXES[c], c);
+});
+
+test('semua nama di overlay ada di tabel kodenya, dan semua rujukan valid', () => {
+  for (const [prefix, byLetter] of Object.entries(Verify.LETTERS)) {
+    const known = new Set((Series.RAW[prefix] || []).map((r) => r[0]));
+    for (const [letter, spec] of Object.entries(byLetter)) {
+      assert.match(letter, /^[A-Z]$/);
+      for (const n of spec.names || []) assert.ok(known.has(n), prefix + ' ' + letter + ' ' + n);
+      assert.ok(['tinggi', 'sedang', 'rendah'].includes(spec.conf), prefix + letter);
+      assert.ok(spec.note, prefix + letter);
+    }
+  }
+  for (const [code, v] of Object.entries(Verify.CODES)) {
+    assert.ok(Data.PREFIXES[code], 'kode tidak dikenal ' + code);
+    assert.ok(['tinggi', 'sedang'].includes(v.conf), code);
+    assert.ok(['cocok', 'sebagian', 'konflik', 'tanpa-pembanding'].includes(v.status), code);
+    for (const k of v.refs) {
+      assert.ok(Verify.REFS[k], code + ' ' + k);
+      assert.match(Verify.REFS[k][1], /^https:\/\//);
+    }
+    assert.ok(v.note, code);
+  }
+  // setiap kode yang punya rincian harus punya catatan verifikasi
+  for (const [code] of Data.PREFIX_ROWS) {
+    if (Data.hasDetail(code)) assert.ok(Verify.CODES[code], 'belum ada catatan verifikasi: ' + code);
+  }
+});
+
+test('status "cocok" selalu punya rujukan nyata (kecuali L)', () => {
+  for (const [code, v] of Object.entries(Verify.CODES)) {
+    if (v.status === 'cocok' && code !== 'L') assert.ok(v.refs.length > 0, code);
+  }
+});
+
+test('Samsat Jakarta: induk dan gerai, tanpa telepon karangan', () => {
+  const r = parsePlate('B 1234 SKA');
+  assert.ok(r.samsat.some((s) => /Induk Jakarta Selatan/.test(s.name)));
+  assert.ok(r.samsatRefs.length >= 1);
+  for (const s of r.samsat) assert.equal(s.phone, '');
+  const utara = parsePlate('B 1234 UA').samsat.map((s) => s.name);
+  assert.ok(utara.includes('Samsat Induk Jakarta Pusat dan Utara'));
+  // daerah tanpa sumber alamat tidak mendapat Samsat
+  assert.equal(parsePlate('H 1234 AB').samsat.length, 0);
+});
+
+test('Surabaya: nama Samsat saja, alamat dibiarkan kosong', () => {
+  const r = parsePlate('L 1234 AB');
+  assert.equal(r.samsat.length, 4);
+  for (const s of r.samsat) assert.equal(s.address, '');
+});
+
+test('plat D tetap memakai Samsat Bandung Raya dan catatannya', () => {
+  const r = parsePlate('D 5002 FA');
+  assert.equal(r.samsat.length, 3);
+  assert.match(r.samsatNote, /Bandung|Samsat/);
 });

@@ -44,6 +44,34 @@
   }
 
   function mapsUrl(q) { return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q); }
+  var REPO = 'https://github.com/baska-pro/plat';
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  function idDate(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+    return m ? Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1] + ' ' + m[1] : '';
+  }
+  var STATUS_TEXT = {
+    'cocok': 'cocok dengan penerbit lain',
+    'sebagian': 'cocok sebagian dengan penerbit lain',
+    'konflik': 'ada penerbit lain yang berbeda',
+    'tanpa-pembanding': 'belum ada pembanding'
+  };
+  var STATUS_SHORT = { 'cocok': 'cocok', 'sebagian': 'sebagian', 'konflik': 'berbeda', 'tanpa-pembanding': 'tanpa pembanding' };
+  /** Tautan GitHub Issue dengan formulir terisi. Nomor plat TIDAK ikut dikirim, hanya kode dan huruf seri. */
+  function issueUrl(f) {
+    var q = new URLSearchParams({ template: 'koreksi-data.yml', title: 'Koreksi data: kode ' + f.kode + (f.huruf ? ' huruf ' + f.huruf : '') });
+    ['kode', 'huruf', 'hasil', 'keyakinan'].forEach(function (k) { if (f[k]) q.set(k, f[k]); });
+    return REPO + '/issues/new?' + q.toString();
+  }
+  function verifHtml(o) {
+    if (!o || !o.checked) return '';
+    return '<p class="ver"><span class="ver-dot ' + esc(o.status) + '"></span>Dicek ' + esc(idDate(o.checked)) + ' &middot; ' + esc(STATUS_TEXT[o.status] || '') + '</p>';
+  }
+  function refsHtml(refs) {
+    return (refs || []).map(function (x) {
+      return '<a href="' + esc(x.url) + '" target="_blank" rel="noopener noreferrer">' + esc(x.label) + '</a>';
+    }).join('<br>');
+  }
   function telUrl(p) { return 'tel:' + p.replace(/[^\d+]/g, '').replace(/^0/, '+62'); }
   function uniq(arr) { return arr.filter(function (x, i) { return x && arr.indexOf(x) === i; }); }
 
@@ -156,7 +184,7 @@
       if (cs.length === 1 && cs[0].letters && cs[0].letters.length > 1 && cs[0].letters.length < 26) {
         v.sub += ' &middot; seluruh huruf seri daerah ini: <b>' + esc(compress(cs[0].letters)) + '</b>';
       }
-      v.stamp = stampHtml(r.origin.confidence);
+      v.stamp = stampHtml(r.origin.confidence) + verifHtml(r.origin);
     } else if (r.area) {
       v.kicker = 'Baru sampai tingkat provinsi';
       v.names = [r.area.province];
@@ -232,19 +260,34 @@
 
   function samsatHtml(r) {
     if (!r.samsat.length) return '';
-    var ambiguous = r.regionCandidates && r.regionCandidates.length > 1;
+    var many = r.samsat.some(function (x) { return x.regionName !== r.samsat[0].regionName; });
     var h = '<section><div class="sec-title"><h2>Samsat yang melayani</h2></div>' +
-      '<div class="note"><b class="tag">Info</b><span>' + esc(D.SAMSAT_NOTE) + '</span></div>' +
+      '<div class="note"><b class="tag">Info</b><span>' + esc(r.samsatNote) + '</span></div>' +
       '<div class="samsat-grid' + (r.samsat.length > 1 ? ' cols' : '') + '" style="margin-top:12px">';
     r.samsat.forEach(function (s) {
-      h += '<div class="samsat">' + (ambiguous ? '<div class="tag">' + esc(s.regionName) + '</div>' : '') +
-        '<div class="name">' + esc(s.name) + '</div><div class="meta">' + esc(s.address) + '</div>' +
-        '<div class="meta">' + esc(s.phone) + ' &middot; ' + esc(s.hours) + '</div>' +
+      var meta = [];
+      if (s.phone) meta.push(esc(s.phone));
+      if (s.hours) meta.push(esc(s.hours));
+      h += '<div class="samsat">' + (many ? '<div class="tag">' + esc(s.regionName) + '</div>' : '') +
+        '<div class="name">' + esc(s.name) + '</div>' +
+        '<div class="meta">' + (s.address ? esc(s.address) : 'Alamat belum terverifikasi') + '</div>' +
+        (meta.length ? '<div class="meta">' + meta.join(' &middot; ') + '</div>' : '') +
         (s.note ? '<div class="note-i">' + esc(s.note) + '</div>' : '') +
-        '<div class="acts"><a class="btn small" target="_blank" rel="noopener" href="' + mapsUrl(s.name.replace(/\s*\(.*\)/, '') + ' ' + s.address) + '">Peta</a>' +
-        '<a class="btn small" href="' + telUrl(s.phone) + '">Telepon</a></div></div>';
+        '<div class="acts"><a class="btn small" target="_blank" rel="noopener" href="' + mapsUrl(s.name.replace(/\s*\(.*\)/, '') + ' ' + (s.address || r.origin.candidates[0].province)) + '">Peta</a>' +
+        (s.phone ? '<a class="btn small" href="' + telUrl(s.phone) + '">Telepon</a>' : '') + '</div></div>';
     });
-    return h + '</div></section>';
+    if (r.samsatRefs.length) h += '</div><p class="muted src-line">Sumber: ' + refsHtml(r.samsatRefs).replace(/<br>/g, ', ') + '</p></section>';
+    else h += '</div></section>';
+    return h;
+  }
+
+  function reportBtn(r) {
+    if (r.kind !== 'reguler' || !r.origin) return '';
+    var first = r.series ? r.series.charAt(0) : '';
+    var hasil = r.origin.candidates.map(function (c) { return c.name; }).join(' / ') + ' (keyakinan ' + r.origin.confidence + ')';
+    return '<a class="btn small" id="act-report" target="_blank" rel="noopener noreferrer" href="' +
+      esc(issueUrl({ kode: r.prefix, huruf: first, hasil: hasil, keyakinan: r.origin.confidence })) +
+      '" title="Membuka formulir di GitHub. Nomor plat tidak ikut dikirim, hanya kode dan huruf seri.">Data ini salah?</a>';
   }
 
   function resultHtml(r) {
@@ -265,7 +308,8 @@
         rows += '<div class="row"><div class="k">Masa berlaku plat</div><div class="v">' + esc(e.label) + st + '</div></div>';
       }
       if (r.origin) {
-        rows += '<div class="row"><div class="k">Sumber data</div><div class="v"><small style="margin:0">' + sourcesHtml(r.origin.sources) + '</small></div></div>';
+        rows += '<div class="row"><div class="k">Dibandingkan dengan</div><div class="v"><small style="margin:0">' +
+          (r.origin.refs && r.origin.refs.length ? refsHtml(r.origin.refs) : 'Belum ada pembanding yang ditemukan') + '</small></div></div>';
       }
     }
 
@@ -275,8 +319,8 @@
     if (r.origin && r.origin.note) {
       notes += '<div class="note' + (r.origin.confidence === 'rendah' ? ' warn' : '') + '"><b class="tag">Data</b><span>' + esc(r.origin.note) + '</span></div>';
     }
-    if (r.origin && r.prefix !== 'D') {
-      notes += '<div class="note"><b class="tag">Samsat</b><span>Alamat Samsat rinci baru tersedia untuk Bandung Raya (plat D). Untuk daerah lain, tanyakan ke Bapenda provinsi setempat.</span></div>';
+    if (r.origin && r.prefix !== 'D' && !r.samsat.length) {
+      notes += '<div class="note"><b class="tag">Samsat</b><span>Alamat Samsat rinci baru tersedia untuk Bandung Raya dan Jakarta. Untuk daerah lain, tanyakan ke Bapenda provinsi setempat.</span></div>';
     }
     if (r.vehicle) notes += '<div class="note"><b class="tag">Jenis</b><span>' + esc(D.NUMBER_NOTE) + '</span></div>';
 
@@ -285,7 +329,7 @@
       '<div class="slip-body">' +
         '<div class="verdict"><p class="kicker">' + esc(v.kicker) + '</p>' + names +
           '<p class="origin-sub">' + v.sub + '</p>' + v.stamp +
-          '<div class="actions"><button class="btn small" type="button" id="act-copy">Salin ringkasan</button><button class="btn small" type="button" id="act-share">Bagikan</button></div></div>' +
+          '<div class="actions"><button class="btn small" type="button" id="act-copy">Salin ringkasan</button><button class="btn small" type="button" id="act-share">Bagikan</button>' + reportBtn(r) + '</div></div>' +
         plateShowHtml(r) +
       '</div>' +
       decoderHtml(r) + keysHtml(r) +
@@ -450,8 +494,13 @@
         '<span class="al">' + esc(a.letters.length === 26 ? 'semua' : compress(a.letters)) + '</span></button>';
     }).join('');
 
+    var vf = D.verifyOf(prefix);
+    var vline = areas.length
+      ? '<div class="atlas-ver">' + verifHtml({ checked: vf.checked, status: vf.status }) + '<p class="muted">' + esc(vf.note) + '</p>' +
+        '<a class="btn small" target="_blank" rel="noopener noreferrer" href="' + esc(issueUrl({ kode: prefix, huruf: atlas.hotLetter || '', hasil: 'Peta huruf kode ' + prefix })) + '">Data kode ini salah?</a></div>'
+      : '';
     var body = areas.length
-      ? '<div class="readout" id="readout" aria-live="polite">Kode ' + esc(prefix) + '<small>' + esc(row.province) + '. Sentuh sebuah huruf atau daerah.</small></div>' +
+      ? vline + '<div class="readout" id="readout" aria-live="polite">Kode ' + esc(prefix) + '<small>' + esc(row.province) + '. Sentuh sebuah huruf atau daerah.</small></div>' +
         '<div class="keys">' + keys + '</div><div class="area-list">' + list + '</div>'
       : '<div class="readout">Kode ' + esc(prefix) + '<small>' + esc(row.province) + ': ' + esc(row.areas) + '. Rincian huruf seri untuk kode ini belum ada di data aplikasi.</small></div>';
 
@@ -496,6 +545,14 @@
       });
     });
     h += '</div></div></details>';
+
+    var jkt = {};
+    Object.keys(D.SAMSAT_AREA).filter(function (k) { return k.indexOf('B|') === 0; }).forEach(function (k) {
+      D.SAMSAT_AREA[k].offices.forEach(function (o) { jkt[o.name] = o; });
+    });
+    h += '<details class="fold"><summary>Samsat Jakarta</summary><div class="fold-body"><p>Alamat dari DDTCNews (6 Nov 2026); telepon dan jam hari kerja belum terverifikasi.</p><div class="samsat-grid cols">' +
+      Object.keys(jkt).map(function (n) { return '<div class="samsat"><div class="name">' + esc(n) + '</div><div class="meta">' + esc(jkt[n].address) + '</div></div>'; }).join('') +
+      '</div></div></details>';
 
     h += '<details class="fold"><summary>Rentang nomor dan jenis kendaraan</summary><div class="fold-body"><p>' + esc(D.NUMBER_NOTE) + '</p><div class="table-wrap" style="margin:0;box-shadow:none"><table><thead><tr><th>Nomor</th><th>Jenis</th></tr></thead><tbody>' +
       D.NUMBER_RANGES.map(function (r) { return '<tr><td class="mono">' + r.from + ' – ' + r.to + '</td><td>' + esc(r.label) + '</td></tr>'; }).join('') + '</tbody></table></div></div></details>';
@@ -573,18 +630,38 @@
     var srcs = Object.keys(D.SOURCES).map(function (k) {
       return '<li><a href="' + esc(D.SOURCES[k].url) + '" target="_blank" rel="noopener noreferrer">' + esc(D.SOURCES[k].title) + '</a></li>';
     }).join('');
+    var V = D.VERIFY;
+    var order = { 'konflik': 0, 'sebagian': 1, 'tanpa-pembanding': 2, 'cocok': 3 };
+    var rows = D.PREFIX_ROWS.map(function (r) {
+      var has = D.hasDetail(r[0]);
+      var v = has ? D.verifyOf(r[0]) : null;
+      return { code: r[0], prov: r[1], has: has, v: v };
+    }).sort(function (x, y) {
+      var ox = x.v ? order[x.v.status] : 4, oy = y.v ? order[y.v.status] : 4;
+      return ox - oy || (x.code < y.code ? -1 : 1);
+    });
+    var table = '<div class="table-wrap" style="margin:0;box-shadow:none"><table class="vtable"><thead><tr><th>Kode</th><th>Provinsi</th><th>Status</th><th>Dicek</th></tr></thead><tbody>' +
+      rows.map(function (x) {
+        return '<tr><td class="mono">' + esc(x.code) + '</td><td>' + esc(x.prov) + '</td><td>' +
+          (x.v ? '<span class="ver-dot ' + esc(x.v.status) + '"></span>' + esc(STATUS_SHORT[x.v.status]) : 'tingkat provinsi') +
+          '</td><td class="nw">' + (x.v ? esc(idDate(x.v.checked).replace(/ \d{4}$/, '')) : '—') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+
     $('#info-content').innerHTML = '<div class="prose">' +
-      '<p>Tidak ada API atau dokumen resmi Polri maupun Samsat yang menerbitkan pembagian huruf seri plat. Aplikasi ini memakai tabel publik, dan <b>setiap hasil diberi cap tingkat keyakinan</b> supaya Anda tahu seberapa kuat dasarnya.</p>' +
-      '<div><div class="legend-row"><div class="stamp tinggi">Keyakinan tinggi</div><p>Dua sumber atau lebih yang memuat tabel rinci sepakat. Contoh: plat B (Jakarta, Bekasi, Depok, Tangerang), plat H (Semarang), huruf A–R plat D untuk Kota Bandung.</p></div>' +
-      '<div class="legend-row"><div class="stamp sedang">Keyakinan sedang</div><p>Hanya satu tabel rinci yang tersedia tanpa pembanding independen, atau mayoritas sumber sepakat dengan satu sumber berbeda (contoh: S/T dan V/Y di plat D). Kemungkinan besar benar, tetapi belum diverifikasi silang.</p></div>' +
-      '<div class="legend-row"><div class="stamp rendah">Ambigu</div><p>Sumber saling bertentangan atau satu huruf tercatat untuk beberapa daerah (contoh: huruf W dan Z plat D). Aplikasi menampilkan semua kandidat, bukan menebak.</p></div>' +
-      '<div class="legend-row"><div class="stamp netral">Tingkat provinsi</div><p>Hanya provinsi yang bisa ditentukan: rincian huruf seri untuk kode itu belum ada, atau huruf tersebut tidak tercatat di tabel.</p></div></div>' +
+      '<p>Tidak ada API atau dokumen resmi Polri maupun Samsat yang menerbitkan pembagian huruf seri plat. Aplikasi ini memakai tabel publik, dan <b>setiap hasil diberi cap tingkat keyakinan serta tanggal pemeriksaan</b> supaya Anda tahu seberapa kuat dasarnya.</p>' +
+      '<div><div class="legend-row"><div class="stamp tinggi">Keyakinan tinggi</div><p>Tabel utama cocok dengan setidaknya satu artikel lain yang memuat tabel rinci, tanpa ada yang bertentangan untuk huruf itu. Contoh: plat B, plat H, huruf A–R plat D.</p></div>' +
+      '<div class="legend-row"><div class="stamp sedang">Keyakinan sedang</div><p>Hanya satu tabel yang tersedia, atau pembandingnya tidak memuat huruf itu, atau mayoritas sumber sepakat dengan satu yang berbeda (contoh: S/T dan V/Y di plat D, plat KU).</p></div>' +
+      '<div class="legend-row"><div class="stamp rendah">Ambigu</div><p>Sumber saling bertentangan atau satu huruf tercatat untuk beberapa daerah (contoh: W dan Z plat D, sebagian huruf plat N dan EA). Aplikasi menampilkan semua kandidat, bukan menebak.</p></div>' +
+      '<div class="legend-row"><div class="stamp netral">Tingkat provinsi</div><p>Hanya provinsi yang bisa ditentukan: rincian huruf seri untuk kode itu belum ada, atau huruf tersebut tidak tercatat.</p></div></div>' +
+      '<div class="note"><b class="tag">Catatan</b><span>"Cocok" berarti tidak ada tabel lain yang bertentangan, <b>bukan</b> data resmi. Sebagian besar penerbit (Moladin, detikOto, Daihatsu, Auto2000, Popmama, IDN Times) saling mengutip dan tidak terbukti independen. Karena itu kesalahan yang sama di semuanya tetap mungkin lolos.</span></div>' +
+      '<h2>Status per kode wilayah</h2><p>Diurutkan dari yang paling perlu dicek. Terakhir diperiksa menyeluruh pada ' + esc(idDate(V.ASOF)) + '.</p>' + table +
       '<h2>Yang tidak bisa dibaca dari plat</h2><ul>' +
-      '<li><b>Kantor Samsat spesifik.</b> Plat tidak memuatnya. Alamat Samsat baru tersedia untuk Bandung Raya, dari artikel 2017 dan 2021, jadi cek ulang sebelum berkunjung.</li>' +
+      '<li><b>Kantor Samsat spesifik.</b> Plat tidak memuatnya. Alamat Samsat tersedia untuk Bandung Raya (artikel 2017 dan 2021) dan Jakarta (DDTCNews, Nov 2026). Surabaya hanya nama kantornya. Daerah lain belum ada, dan semuanya sebaiknya dicek ulang sebelum berkunjung.</li>' +
       '<li><b>Pribadi atau umum.</b> Ditentukan warna plat, bukan angka atau huruf.</li>' +
       '<li><b>Jenis kendaraan.</b> Berdasarkan rentang nomor awal; nomor bisa dipakai ulang dengan seri lain, jadi sifatnya indikatif.</li>' +
       '<li><b>Pemilik, merek, tipe, dan status pajak.</b> Tidak tersedia secara publik. Untuk pajak, pakai kanal resmi Bapenda provinsi.</li>' +
-      '<li><b>Pemekaran dan perubahan.</b> Daerah baru atau perubahan pembagian huruf bisa belum tercermin di tabel sumber. Kepulauan Seribu dan Kalimantan Utara belum punya data rinci.</li></ul>' +
+      '<li><b>Pemekaran dan perubahan.</b> Sejak 2024 Papua Selatan (PS), Papua Tengah (PT), dan Papua Barat Daya (PY) punya kode sendiri, plat lama tetap berlaku. Kode Papua Pegunungan belum ditemukan di sumber. Kepulauan Seribu tidak tercantum di sumber mana pun, jadi hurufnya tidak bisa dipastikan.</li></ul>' +
+      '<h2>Ada yang salah?</h2><p>Tombol <b>Data ini salah?</b> di hasil dan di Peta huruf membuka formulir di GitHub dengan kode dan huruf sudah terisi. Nomor plat lengkap tidak ikut dikirim. Koreksi paling berguna bila disertai sumber resmi (Bapenda, Samsat, Polda).</p>' +
       '<h2>Privasi</h2><p>Semua pemrosesan terjadi di perangkat Anda. Tidak ada plat yang dikirim ke server. Riwayat tersimpan lokal di browser dan bisa dihapus kapan saja.</p>' +
       '<h2>Sumber data</h2><ul class="src-list">' + srcs + '</ul></div>';
   }

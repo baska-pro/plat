@@ -1,0 +1,40 @@
+name: Koreksi data plat
+description: Laporkan huruf seri atau daerah yang salah, atau kirim data yang belum ada
+title: "Koreksi data: kode "
+labels: ["data"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Terima kasih sudah membantu. **Jangan menulis nomor plat lengkap seseorang** (angka dan huruf pemilik). Cukup kode wilayah dan huruf seri.
+        Koreksi paling berguna bila disertai sumber resmi (Bapenda, Samsat, Ditlantas/Polda) atau artikel yang memuat tabelnya.
+  - type: input
+    id: kode
+    attributes:
+      label: Kode wilayah
+      description: Huruf di depan angka, misalnya B, D, AB.
+      placeholder: B
+    validations:
+      required: true
+  - type: input
+    id: huruf
+    attributes:
+      label: Huruf seri (huruf pertama setelah angka)
+      placeholder: S
+  - type: textarea
+    id: hasil
+    attributes:
+      label: Hasil di aplikasi
+      description: Daerah yang ditampilkan CekPlat.
+  - type: textarea
+    id: seharusnya
+    attributes:
+      label: Seharusnya
+      description: Daerah yang benar untuk kode dan huruf ini, atau data yang belum ada.
+    validations:
+      required: true
+  - type: textarea
+    id: sumber
+    attributes:
+      label: Sumber
+      description: Tautan atau keterangan dasar koreksi (situs Bapenda/Samsat, artikel, pengalaman sebagai warga setempat).

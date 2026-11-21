@@ -6,9 +6,9 @@
  * Format UMD: bisa dipakai di browser (window.PlatData) maupun Node (require).
  */
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) module.exports = factory(require('./series.js'));
-  else root.PlatData = factory(root.PlatSeries);
-})(typeof self !== 'undefined' ? self : this, function (Series) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./series.js'), require('./verify.js'));
+  else root.PlatData = factory(root.PlatSeries, root.PlatVerify);
+})(typeof self !== 'undefined' ? self : this, function (Series, Verify) {
   'use strict';
 
   /* ---------------------------------------------------------------- Sumber */
@@ -68,6 +68,18 @@
     hukumonline: {
       title: 'Hukumonline - Arti Kode Plat Nomor Khusus dan Rahasia',
       url: 'https://www.hukumonline.com/klinik/a/ini-arti-kode-plat-nomor-khusus-dan-rahasia-untuk-kendaraan-pejabat-lt5fa10ac795848/'
+    },
+    ddtcSamsat2026: {
+      title: 'DDTCNews: Samsat Jakarta buka hingga Sabtu (6 Nov 2026)',
+      url: 'https://news.ddtc.co.id/berita/daerah/1823916/mudahkan-wajib-pajak-sejumlah-samsat-di-jakarta-buka-hingga-sabtu'
+    },
+    detikSamsatJaksel: {
+      title: 'detikOto: Samsat Jakarta Selatan sampai jam berapa (Sep 2023)',
+      url: 'https://oto.detik.com/berita/d-6938153/samsat-jakarta-selatan-sampai-jam-berapa-ini-keterangan-dan-layanannya'
+    },
+    detikSamsatSby: {
+      title: 'detikJatim: Samsat Manyar Surabaya (Jan 2026)',
+      url: 'https://www.detik.com/jatim/berita/d-8289768/samsat-manyar-surabaya-ramai-di-hari-pertama-kerja-usai-libur-tahun-baru'
     },
     samsat2017: {
       title: 'Seputar Bandung Raya - Alamat Samsat di Bandung Raya (2017)',
@@ -319,11 +331,16 @@
     ['DN', 'Sulawesi Tengah', 'Seluruh Sulawesi Tengah'],
     ['DT', 'Sulawesi Tenggara', 'Seluruh Sulawesi Tenggara'],
     ['DD', 'Sulawesi Selatan', 'Seluruh Sulawesi Selatan'],
+    ['DP', 'Sulawesi Selatan', 'Parepare, Barru, Sidrap, Pinrang, Enrekang, Palopo, Luwu, Toraja'],
+    ['DW', 'Sulawesi Selatan', 'Bone, Wajo, Soppeng, Sinjai'],
     ['DC', 'Sulawesi Barat', 'Seluruh Sulawesi Barat'],
     ['DE', 'Maluku', 'Seluruh Maluku'],
     ['DG', 'Maluku Utara', 'Seluruh Maluku Utara'],
     ['PA', 'Papua', 'Seluruh Papua'],
     ['PB', 'Papua Barat', 'Seluruh Papua Barat'],
+    ['PS', 'Papua Selatan', 'Seluruh Papua Selatan (kode baru sejak 2024, sebelumnya PA)'],
+    ['PT', 'Papua Tengah', 'Seluruh Papua Tengah (kode baru sejak 2024, sebelumnya PA)'],
+    ['PY', 'Papua Barat Daya', 'Seluruh Papua Barat Daya (kode baru sejak 2024, sebelumnya PB)'],
     ['BL', 'Aceh', 'Seluruh Aceh'],
     ['BB', 'Sumatera Utara', 'Wilayah barat Sumatera Utara'],
     ['BK', 'Sumatera Utara', 'Wilayah timur Sumatera Utara'],
@@ -409,7 +426,10 @@
         }),
         confidence: info.confidence,
         note: info.note,
-        sources: ['popmama', 'moladinSuffix', 'moladinList', 'detikSuffix']
+        sources: ['popmama', 'moladinSuffix', 'moladinList', 'detikSuffix'],
+        refs: srcRefs(['popmama', 'moladinSuffix', 'moladinList', 'detikSuffix']),
+        checked: verifyOf('D').checked,
+        status: info.confidence === 'tinggi' ? 'cocok' : (info.confidence === 'sedang' ? 'sebagian' : 'konflik')
       };
     }
 
@@ -419,25 +439,70 @@
         candidates: [{ name: w.name, province: provinceOf(prefix), letters: Series.ALL.split('') }],
         confidence: w.conf,
         note: w.note,
-        sources: ['detikPrefix']
+        sources: ['detikPrefix'],
+        refs: srcRefs(['detikPrefix']),
+        checked: verifyOf(prefix).checked,
+        status: 'cocok'
       };
     }
 
     var hit = SERIES_INDEX[prefix] && SERIES_INDEX[prefix][letter];
-    if (!hit) return null;
-    var meta = Series.META[prefix] || Series.DEFAULT_META;
+    var ov = Verify.LETTERS[prefix] && Verify.LETTERS[prefix][letter];
+    if (!hit && !ov) return null;
+    var meta = verifyOf(prefix);
     var out = {
-      candidates: hit.map(function (a) { return { name: a.name, province: a.province, letters: a.letters }; }),
+      candidates: (hit || []).map(function (a) { return { name: a.name, province: a.province, letters: a.letters }; }),
       confidence: meta.conf,
       note: meta.note,
-      sources: meta.src
+      sources: [],
+      refs: meta.refs,
+      checked: meta.checked,
+      status: meta.status
     };
-    if (hit.length > 1) {
+    if (hit && hit.length > 1) {
       out.confidence = 'rendah';
       out.note = 'Huruf ' + letter + ' tercatat untuk lebih dari satu daerah di tabel sumber: ' +
         hit.map(function (a) { return a.name; }).join(' / ') + '. Tidak bisa dipastikan hanya dari plat.';
+      if (ov && ov.note) out.note += ' ' + ov.note;
+    }
+    if (ov) {
+      if (ov.names) {
+        out.candidates = ov.names.map(function (n) {
+          var a = areaByName(prefix, n);
+          return { name: a.name, province: a.province, letters: a.letters };
+        });
+      }
+      out.confidence = out.candidates.length > 1 ? 'rendah' : ov.conf;
+      if (!(hit && hit.length > 1)) out.note = ov.note;
     }
     return out;
+  }
+
+  function srcRefs(ids) {
+    return ids.map(function (id) { return { label: SOURCES[id].title, url: SOURCES[id].url }; });
+  }
+
+  var DEFAULT_VERIFY = { conf: 'sedang', status: 'tanpa-pembanding', refs: [], note: 'Berasal dari satu tabel publik (Moladin) dan belum diverifikasi silang.' };
+
+  /** Metadata verifikasi satu kode, dengan rujukan sudah berbentuk {label, url}. */
+  function verifyOf(prefix) {
+    var v = Verify.CODES[prefix] || DEFAULT_VERIFY;
+    return {
+      conf: v.conf,
+      status: v.status,
+      checked: v.checked || Verify.ASOF,
+      note: v.note,
+      refs: (v.refs || []).map(function (k) { return { label: Verify.REFS[k][0], url: Verify.REFS[k][1] }; })
+    };
+  }
+
+  function areaByName(prefix, name) {
+    var found = (SERIES_INDEX[prefix] ? Series.RAW[prefix] : []).filter(function (r) { return r[0] === name; })[0];
+    return {
+      name: name,
+      province: (found && found[2]) || provinceOf(prefix),
+      letters: found ? found[1].split('') : []
+    };
   }
 
   function lettersOfRegion(key) {
@@ -470,6 +535,47 @@
 
   var SAMSAT_NOTE = 'Plat nomor tidak memuat kantor Samsat spesifik. Berikut kantor Samsat yang melayani wilayah ini. Alamat dan jam layanan bersumber dari artikel 2017 dan 2021, jadi cek ulang sebelum berkunjung.';
 
+  /* -------------------------------------------- Samsat di luar Bandung Raya */
+  /*
+   * SAMSAT_AREA['KODE|Nama daerah'] = { note, src:[id sumber], offices:[{name, address, phone, hours, note}] }
+   * Hanya daerah yang punya sumber alamat yang bisa dirujuk. Daerah lain tidak diisi
+   * (aplikasi mengarahkan ke Bapenda), bukan ditebak.
+   */
+  var SAT_2026 = 'Sab 08.00-12.00 WIB, khusus 7 Nov-19 Des 2026. Jam hari kerja belum terverifikasi.';
+  var JKT_NOTE = 'Plat Jakarta tidak menunjuk kantor Samsat tertentu. Ini kantor yang melayani wilayah tersebut. Alamat dari DDTCNews (6 Nov 2026); telepon dan jam hari kerja belum terverifikasi, jadi cek ulang sebelum berkunjung.';
+  var INDUK_UTARA = { name: 'Samsat Induk Jakarta Pusat dan Utara', address: 'Jl. Gunung Sahari No. 13, Pademangan, Jakarta Utara', phone: '', hours: SAT_2026 };
+
+  var SAMSAT_AREA = {
+    'B|Kota Adm. Jakarta Selatan': { note: JKT_NOTE, src: ['ddtcSamsat2026', 'detikSamsatJaksel'], offices: [
+      { name: 'Samsat Induk Jakarta Selatan', address: 'Komplek Gedung Polda Metro Jaya, Jl. Jenderal Gatot Subroto, Kebayoran Baru, Jakarta Selatan', phone: '',
+        hours: 'Sen-Jum 08.00-15.00 WIB (data 2023); ' + SAT_2026.replace('Jam hari kerja belum terverifikasi.', '') .trim() },
+      { name: 'Gerai Samsat Pasar Minggu', address: 'Jl. Raya Ragunan No. 16, Pasar Minggu, Jakarta Selatan', phone: '', hours: SAT_2026 }
+    ] },
+    'B|Kota Adm. Jakarta Timur': { note: JKT_NOTE, src: ['ddtcSamsat2026'], offices: [
+      { name: 'Samsat Induk Jakarta Timur', address: 'Jl. D.I. Panjaitan Kav. 55, Jatinegara, Jakarta Timur', phone: '', hours: SAT_2026 },
+      { name: 'Gerai Samsat Pulo Gadung', address: 'Jl. H. Darip No. 1, Jatinegara Kaum, Pulo Gadung, Jakarta Timur', phone: '', hours: SAT_2026 }
+    ] },
+    'B|Kota Adm. Jakarta Barat': { note: JKT_NOTE, src: ['ddtcSamsat2026'], offices: [
+      { name: 'Samsat Induk Jakarta Barat', address: 'Jl. Daan Mogot KM 13, Cengkareng, Jakarta Barat', phone: '', hours: SAT_2026 },
+      { name: 'Gerai Samsat Kebon Jeruk', address: 'Jl. Lapangan Bola No. 2 (belakang Kantor Kecamatan Kebon Jeruk), Jakarta Barat', phone: '', hours: SAT_2026 }
+    ] },
+    'B|Kota Adm. Jakarta Utara': { note: JKT_NOTE, src: ['ddtcSamsat2026'], offices: [
+      INDUK_UTARA,
+      { name: 'Gerai Samsat Penjaringan', address: 'Jl. Pluit Raya No. 5, Penjaringan, Jakarta Utara', phone: '', hours: SAT_2026 }
+    ] },
+    'B|Kota Adm. Jakarta Pusat': { note: JKT_NOTE, src: ['ddtcSamsat2026'], offices: [
+      INDUK_UTARA,
+      { name: 'Gerai Samsat Kemayoran', address: 'Jl. Serdang III No. 1, Serdang, Kemayoran, Jakarta Pusat', phone: '', hours: SAT_2026 }
+    ] },
+    'L|Kota Surabaya': { note: 'Sumber (detikJatim, Jan 2026) hanya menyebut empat Samsat Surabaya: Barat, Timur, Utara, dan Selatan, dengan Manyar sebagai Samsat Surabaya Timur. Alamat belum terverifikasi; tombol Peta mencari lewat nama.', src: ['detikSamsatSby'], offices: [
+      { name: 'Samsat Surabaya Timur (Manyar)', address: '', phone: '', hours: '' },
+      { name: 'Samsat Surabaya Barat', address: '', phone: '', hours: '' },
+      { name: 'Samsat Surabaya Utara', address: '', phone: '', hours: '' },
+      { name: 'Samsat Surabaya Selatan', address: '', phone: '', hours: '' }
+    ] }
+  };
+
+
   return {
     SOURCES: SOURCES,
     REGIONS: REGIONS,
@@ -481,6 +587,9 @@
     areasOfPrefix: areasOfPrefix,
     searchAreas: searchAreas,
     SAMSAT: SAMSAT,
+    SAMSAT_AREA: SAMSAT_AREA,
+    verifyOf: verifyOf,
+    VERIFY: Verify,
     NUMBER_RANGES: NUMBER_RANGES,
     COLORS: COLORS,
     PREFIXES: PREFIXES,

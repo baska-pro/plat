@@ -71,6 +71,8 @@
       usage: null,
       expiry: null,
       samsat: [],
+      samsatNote: '',
+      samsatRefs: [],
       errors: [],
       warnings: [],
       notes: []
@@ -207,6 +209,25 @@
       }
     }
 
+    // ---- Samsat untuk daerah di luar Bandung Raya (hanya yang punya sumber alamat)
+    if (prefix !== 'D' && out.origin) {
+      out.origin.candidates.forEach(function (c) {
+        var g = Data.SAMSAT_AREA[prefix + '|' + c.name];
+        if (!g) return;
+        if (!out.samsatNote) out.samsatNote = g.note;
+        g.src.forEach(function (id) {
+          if (!out.samsatRefs.some(function (x) { return x.url === Data.SOURCES[id].url; })) {
+            out.samsatRefs.push({ label: Data.SOURCES[id].title, url: Data.SOURCES[id].url });
+          }
+        });
+        g.offices.forEach(function (o) {
+          var key = o.name + '|' + o.address;
+          if (out.samsat.some(function (x) { return x.name + '|' + x.address === key; })) return;
+          out.samsat.push(Object.assign({ regionName: c.name }, o));
+        });
+      });
+    }
+
     // ---- Sub-wilayah khusus plat D (Bandung Raya): Samsat
     if (prefix === 'D' && series) {
       var first = series.charAt(0);
@@ -220,6 +241,7 @@
         // Daftar Samsat: gabungan semua kandidat jika ambigu
         var keys = info.candidates || [info.region];
         out.samsat = [];
+        out.samsatNote = Data.SAMSAT_NOTE;
         keys.forEach(function (k) {
           (Data.SAMSAT[k] || []).forEach(function (s) {
             out.samsat.push(Object.assign({ regionKey: k, regionName: Data.REGIONS[k].name }, s));
