@@ -25,9 +25,21 @@ jobs:
           node-version: 22
       - run: npm test
 
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:ui
+
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: test
+    needs: [test, ui]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -39,6 +51,8 @@ jobs:
           mkdir _site
           cp -r index.html sw.js manifest.webmanifest css js icons fonts _site/
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

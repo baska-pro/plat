@@ -81,6 +81,18 @@
       title: 'detikJatim: Samsat Manyar Surabaya (Jan 2026)',
       url: 'https://www.detik.com/jatim/berita/d-8289768/samsat-manyar-surabaya-ramai-di-hari-pertama-kerja-usai-libur-tahun-baru'
     },
+    pajakku38: {
+      title: 'Pajakku: Link e-Samsat per provinsi (diperbarui Agu 2026)',
+      url: 'https://pajakku.com/artikel/cek-pajak-motor-online-terbaru-lengkap-dengan-link-e-samsat-untuk-38-provinsi'
+    },
+    signalStore: {
+      title: 'App Store: SIGNAL - Samsat Digital Nasional',
+      url: 'https://apps.apple.com/us/app/signal-samsat-digital-nasional/id1587653489'
+    },
+    detikAplikasiPajak: {
+      title: 'detikOto: 7 aplikasi cek pajak kendaraan resmi (Mar 2024)',
+      url: 'https://oto.detik.com/berita/d-7268374/7-aplikasi-cek-pajak-kendaraan-resmi-dan-langkah-langkahnya'
+    },
     samsat2017: {
       title: 'Seputar Bandung Raya - Alamat Samsat di Bandung Raya (2017)',
       url: 'https://www.seputarbandungraya.com/2017/12/alamat-nomor-telepon-dan-jam-layanan.html'
@@ -576,6 +588,62 @@
   };
 
 
+  /* ------------------------------------------------- Kanal resmi cek pajak */
+  /*
+   * CekPlat tidak menyimpan atau mencari data kendaraan. Untuk status pajak, pengguna
+   * diarahkan ke kanal resmi. Daftar URL provinsi dari Pajakku (diperbarui Agu 2026,
+   * satu sumber pengumpul), jadi bisa berubah; provinsi tanpa URL yang terverifikasi
+   * memakai pencarian web, bukan tebakan alamat.
+   */
+  var TAX_SIGNAL = {
+    name: 'SIGNAL (Samsat Digital Nasional)',
+    text: 'Aplikasi nasional untuk cek dan bayar pajak, pengesahan STNK, dan SWDKLLJ kendaraan pribadi. Cari "SIGNAL Samsat Digital Nasional" di Play Store atau App Store.',
+    url: SOURCES.signalStore.url
+  };
+  var TAX_SITES = {
+    'Banten': ['https://infopkb.bantenprov.go.id/', 'Aplikasi Sambat'],
+    'DI Yogyakarta': ['https://samsatsleman.jogjaprov.go.id/cek/pajak'],
+    'DKI Jakarta': ['https://samsat-pkb2.jakarta.go.id/'],
+    'Jawa Barat': ['https://bapenda.jabarprov.go.id/e-samsat-jabar', 'Aplikasi Sambara'],
+    'Jawa Tengah': [null, 'Aplikasi New Sakpole'],
+    'Jawa Timur': ['https://bapenda.jatimprov.go.id/info/pkb'],
+    'Bali': ['https://portal.bpdbali.id/infosamsat/'],
+    'Nusa Tenggara Timur': ['https://samsat.bpdntt.co.id/'],
+    'Aceh': ['https://esamsat.acehprov.go.id/'],
+    'Kepulauan Bangka Belitung': ['https://samsat-sungailiat.babelprov.go.id/layanan'],
+    'Bengkulu': ['https://pusako.bengkuluprov.go.id/infopajak'],
+    'Jambi': ['https://jambisamsat.net/infopkb.html'],
+    'Kepulauan Riau': [null, 'Aplikasi ESamsat Kepri'],
+    'Riau': ['https://bapenda.riau.go.id/dashboard/layanan/infopajak'],
+    'Sumatera Barat': ['https://bapenda.sumbarprov.go.id/content/info_pajak_kendaraan', 'Aplikasi E-Samsat Sumbar'],
+    'Sumatera Utara': ['https://bapenda.sumutprov.go.id/website/pajak#/pkb/info-pkb'],
+    'Kalimantan Barat': ['https://jipp.kalbarprov.go.id/inovasi/view/173'],
+    'Kalimantan Selatan': ['https://bapenda.kalselprov.go.id/'],
+    'Kalimantan Tengah': ['https://pajak.samsatkalteng.com/'],
+    'Kalimantan Utara': ['https://dkisp.tarakankota.go.id/esamsat-kalimantan-utara/'],
+    'Gorontalo': ['https://gorontaloprov.go.id/esamsat'],
+    'Sulawesi Barat': ['https://web.bpkpd.sulbarprov.go.id/'],
+    'Sulawesi Selatan': ['https://bapenda.sulselprov.go.id/', 'Aplikasi Bapenda Sulsel Mobile'],
+    'Sulawesi Tengah': ['https://bapenda.sultengprov.go.id/pkb'],
+    'Sulawesi Tenggara': ['https://sultraprov.go.id/esamsat'],
+    'Sulawesi Utara': ['https://bapenda.sulutprov.go.id/cekpajak'],
+    'Maluku': ['https://esamsat.malukuprov.go.id/kiosk/kiosk.aspx'],
+    'Maluku Utara': ['https://esamsat.malutprov.go.id/']
+  };
+
+  /** Kanal resmi untuk satu provinsi: {province, site, app, searchUrl}. */
+  function taxChannels(province) {
+    var key = String(province || '').replace(/\s*\(.*\)\s*$/, '');
+    var t = TAX_SITES[key];
+    return {
+      province: key,
+      site: t && t[0] ? t[0] : '',
+      app: t && t[1] ? t[1] : '',
+      searchUrl: 'https://www.google.com/search?q=' + encodeURIComponent('cek pajak kendaraan bapenda ' + key + ' resmi')
+    };
+  }
+
+
   return {
     SOURCES: SOURCES,
     REGIONS: REGIONS,
@@ -589,6 +657,9 @@
     SAMSAT: SAMSAT,
     SAMSAT_AREA: SAMSAT_AREA,
     verifyOf: verifyOf,
+    TAX_SIGNAL: TAX_SIGNAL,
+    TAX_SITES: TAX_SITES,
+    taxChannels: taxChannels,
     VERIFY: Verify,
     NUMBER_RANGES: NUMBER_RANGES,
     COLORS: COLORS,

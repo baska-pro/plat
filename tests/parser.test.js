@@ -474,3 +474,65 @@ test('plat D tetap memakai Samsat Bandung Raya dan catatannya', () => {
   assert.equal(r.samsat.length, 3);
   assert.match(r.samsatNote, /Bandung|Samsat/);
 });
+
+/* ============================================================ Kuis */
+const Quiz = require('../js/quiz.js');
+
+test('kuis: kumpulan soal hanya dari huruf yakin tinggi dan tepat satu daerah', () => {
+  const pool = Quiz.pool();
+  assert.ok(pool.length > 300);
+  for (const it of pool) {
+    const o = Data.lookupOrigin(it.prefix, it.letter);
+    assert.equal(o.confidence, 'tinggi', it.prefix + it.letter);
+    assert.equal(o.candidates.length, 1, it.prefix + it.letter);
+    assert.equal(o.candidates[0].name, it.area);
+  }
+  assert.ok(!pool.some((p) => p.prefix === 'L'));
+});
+
+test('kuis: soal valid, jawaban benar sesuai aplikasi, pengecoh tidak ikut benar', () => {
+  for (let seed = 1; seed <= 60; seed++) {
+    const rng = Quiz.seeded(seed);
+    for (const q of Quiz.makeRound(10, rng)) {
+      assert.equal(q.options.length, 4, q.plate);
+      assert.equal(new Set(q.options.map((o) => o.name)).size, 4, q.plate);
+      assert.ok(q.answer >= 0 && q.answer < 4);
+      const parsed = parsePlate(q.plate);
+      assert.ok(parsed.ok, q.plate);
+      // jawaban benar harus sama dengan hasil parser
+      assert.equal(parsed.origin.candidates[0].name, q.options[q.answer].name, q.plate);
+      assert.equal(parsed.origin.confidence, 'tinggi', q.plate);
+      // pengecoh bukan daerah yang juga memakai huruf itu
+      q.options.forEach((o, i) => {
+        if (i === q.answer) return;
+        const areas = Data.areasOfPrefix(q.prefix).filter((a) => a.name === o.name);
+        for (const a of areas) assert.ok(!a.letters.includes(q.letter), q.plate + ' ' + o.name);
+        assert.ok(!/sebagian/.test(o.name));
+      });
+    }
+  }
+});
+
+test('kuis: satu putaran punya 10 soal dengan kode yang bervariasi', () => {
+  const round = Quiz.makeRound(10, Quiz.seeded(42));
+  assert.equal(round.length, 10);
+  assert.equal(new Set(round.map((q) => q.prefix)).size, 10);
+  assert.deepEqual(Quiz.makeRound(10, Quiz.seeded(42)).map((q) => q.plate), round.map((q) => q.plate)); // deterministik
+});
+
+/* ============================================================ Kanal resmi pajak */
+test('kanal resmi: SIGNAL, URL provinsi https, nama provinsi dikenal', () => {
+  assert.match(Data.TAX_SIGNAL.url, /^https:\/\//);
+  const provs = new Set(Data.PREFIX_ROWS.map((r) => r[1].replace(/\s*\(.*\)\s*$/, '')));
+  for (const [prov, [url]] of Object.entries(Data.TAX_SITES)) {
+    assert.ok(provs.has(prov), prov);
+    if (url) assert.match(url, /^https:\/\//, prov);
+  }
+  const jkt = Data.taxChannels('DKI Jakarta (dan sekitarnya)');
+  assert.equal(jkt.province, 'DKI Jakarta');
+  assert.ok(jkt.site);
+  // provinsi tanpa URL terverifikasi jatuh ke pencarian, bukan alamat karangan
+  const sumsel = Data.taxChannels('Sumatera Selatan');
+  assert.equal(sumsel.site, '');
+  assert.match(sumsel.searchUrl, /^https:\/\/www\.google\.com\/search\?q=/);
+});

@@ -115,12 +115,14 @@
       b.tabIndex = on ? 0 : -1;
       if (on && focus) b.focus();
     });
+    if (!$('.tab.is-active')) { var t0 = $('.tab'); if (t0) t0.tabIndex = 0; }
     $$('.panel').forEach(function (p) {
       var on = p.id === 'panel-' + name;
       p.hidden = !on; p.classList.toggle('is-active', on);
     });
     if (name === 'ref') renderRef();
     if (name === 'info') renderInfo();
+    if (name === 'game') gameStart();
     if (location.hash !== '#' + name) history.replaceState(null, '', location.pathname + location.search + '#' + name);
     window.scrollTo({ top: 0 });
   }
@@ -290,6 +292,29 @@
       '" title="Membuka formulir di GitHub. Nomor plat tidak ikut dikirim, hanya kode dan huruf seri.">Data ini salah?</a>';
   }
 
+  /** Kanal resmi cek pajak. CekPlat sendiri tidak mencari atau menyimpan data kendaraan. */
+  function taxHtml(r) {
+    if (r.kind !== 'reguler') return '';
+    var provs = [];
+    (r.origin ? r.origin.candidates.map(function (c) { return c.province; }) : [r.area.province]).forEach(function (p) {
+      if (provs.indexOf(p) === -1) provs.push(p);
+    });
+    var h = '<section><div class="sec-title"><h2>Cek pajak lewat kanal resmi</h2></div>' +
+      '<div class="note"><b class="tag">Info</b><span>CekPlat tidak melihat data kendaraan atau pajak. Untuk status pajak dan pembayaran, pakai kanal resmi berikut; tautan provinsi dihimpun dari Pajakku (Agu 2026) dan bisa berubah.</span></div>' +
+      '<div class="samsat-grid cols" style="margin-top:12px">' +
+      '<div class="samsat"><div class="tag">Nasional</div><div class="name">' + esc(D.TAX_SIGNAL.name) + '</div><div class="meta">' + esc(D.TAX_SIGNAL.text) + '</div>' +
+      '<div class="acts"><a class="btn small" target="_blank" rel="noopener noreferrer" href="' + esc(D.TAX_SIGNAL.url) + '">Halaman aplikasi</a></div></div>';
+    provs.forEach(function (p) {
+      var t = D.taxChannels(p);
+      h += '<div class="samsat"><div class="tag">' + esc(t.province) + '</div><div class="name">Bapenda ' + esc(t.province) + '</div>' +
+        '<div class="meta">' + (t.site ? 'Situs cek pajak resmi provinsi.' : 'Belum ada alamat situs yang terverifikasi; cari lewat Google.') +
+        (t.app ? ' ' + esc(t.app) + ' juga tersedia.' : '') + '</div>' +
+        '<div class="acts">' + (t.site ? '<a class="btn small" target="_blank" rel="noopener noreferrer" href="' + esc(t.site) + '">Buka situs</a>' : '') +
+        '<a class="btn small" target="_blank" rel="noopener noreferrer" href="' + esc(t.searchUrl) + '">Cari</a></div></div>';
+    });
+    return h + '</div></section>';
+  }
+
   function resultHtml(r) {
     if (!r.ok) return '<div class="note err" role="alert"><b class="tag">Salah</b><span>' + esc(r.errors.join(' ')) + '</span></div>';
 
@@ -334,7 +359,7 @@
       '</div>' +
       decoderHtml(r) + keysHtml(r) +
       '<div class="slip-rest">' + (notes ? '<div class="notes">' + notes + '</div>' : '') +
-        (rows ? '<div class="form-rows">' + rows + '</div>' : '') + samsatHtml(r) + '</div>' +
+        (rows ? '<div class="form-rows">' + rows + '</div>' : '') + samsatHtml(r) + taxHtml(r) + '</div>' +
       '</article>';
   }
 
@@ -461,6 +486,93 @@
     a.download = 'cekplat-hasil.csv';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+
+  /* ------------------------------------------------------------ tebak plat */
+  var Q = window.PlatQuiz;
+  var ROUND = 10;
+  var game = { qs: [], i: 0, score: 0, picked: -1 };
+  function bestScore() { try { return Number(localStorage.getItem('cekplat.best')) || 0; } catch (e) { return 0; } }
+  function saveBest(n) { try { if (n > bestScore()) localStorage.setItem('cekplat.best', String(n)); } catch (e) {} }
+
+  function gameStart() {
+    var b = bestScore();
+    $('#game').innerHTML = '<div class="g-card"><p class="g-big">' + ROUND + ' soal</p>' +
+      '<p class="muted">Tiap soal menampilkan sebuah plat. Pilih daerah asalnya dari empat pilihan. Tombol angka 1 sampai 4 juga bisa dipakai.</p>' +
+      (b ? '<p class="g-best">Skor terbaik di perangkat ini: <b>' + b + '/' + ROUND + '</b></p>' : '') +
+      '<div class="actions"><button class="btn go" type="button" id="g-start">Mulai</button><button class="btn" type="button" id="g-back">Kembali</button></div></div>';
+  }
+
+  function gameQuestion() {
+    var q = game.qs[game.i];
+    game.picked = -1;
+    $('#game').innerHTML = '<div class="g-card"><div class="g-top"><span>Soal ' + (game.i + 1) + '/' + ROUND + '</span><span>Skor ' + game.score + '</span></div>' +
+      '<div class="g-plate" aria-label="Plat ' + esc(q.plate) + '">' + esc(q.plate) + '</div>' +
+      '<p class="g-ask">Plat ini berasal dari…</p>' +
+      '<div class="g-opts" role="group" aria-label="Pilihan jawaban">' + q.options.map(function (o, i) {
+        return '<button type="button" class="g-opt" data-i="' + i + '"><kbd>' + (i + 1) + '</kbd><span>' + esc(o.name) + '<small>' + esc(o.province) + '</small></span></button>';
+      }).join('') + '</div><div id="g-fb" class="g-fb" role="status" aria-live="polite"></div></div>';
+  }
+
+  function gameAnswer(i) {
+    if (game.picked !== -1) return;
+    var q = game.qs[game.i];
+    game.picked = i;
+    var ok = i === q.answer;
+    if (ok) game.score++;
+    $$('.g-opt').forEach(function (b, k) {
+      b.disabled = true;
+      if (k === q.answer) b.classList.add('right');
+      else if (k === i) b.classList.add('wrong');
+    });
+    var last = game.i === ROUND - 1;
+    $('#g-fb').innerHTML = '<p class="' + (ok ? 'g-ok' : 'g-no') + '"><b>' + (ok ? 'Benar.' : 'Belum tepat.') + '</b> ' + esc(q.explain) + '</p>' +
+      '<div class="actions"><button class="btn go" type="button" id="g-next">' + (last ? 'Lihat skor' : 'Soal berikutnya') + '</button></div>';
+    var nb = $('#g-next'); if (nb) nb.focus();
+  }
+
+  function gameEnd() {
+    var prev = bestScore();
+    saveBest(game.score);
+    var msg = game.score === ROUND ? 'Sempurna.' : game.score >= 8 ? 'Jago sekali.' : game.score >= 5 ? 'Lumayan.' : 'Masih bisa naik. Coba buka Peta huruf dulu.';
+    $('#game').innerHTML = '<div class="g-card"><p class="g-big">' + game.score + '/' + ROUND + '</p><p>' + msg + '</p>' +
+      (game.score > prev ? '<p class="g-best">Skor terbaik baru.</p>' : '') +
+      '<div class="actions"><button class="btn go" type="button" id="g-start">Main lagi</button><button class="btn" type="button" id="g-back">Kembali</button></div></div>';
+  }
+
+  $('#game').addEventListener('click', function (e) {
+    if (e.target.closest('#g-start')) { game = { qs: Q.makeRound(ROUND), i: 0, score: 0, picked: -1 }; gameQuestion(); return; }
+    if (e.target.closest('#g-back')) { showTab('cek'); return; }
+    var o = e.target.closest('.g-opt');
+    if (o) { gameAnswer(Number(o.getAttribute('data-i'))); return; }
+    if (e.target.closest('#g-next')) {
+      game.i++;
+      if (game.i >= ROUND) gameEnd(); else gameQuestion();
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!$('#panel-game').classList.contains('is-active') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (/^[1-4]$/.test(e.key) && $('.g-opt')) gameAnswer(Number(e.key) - 1);
+  });
+  $('#open-game').addEventListener('click', function () { showTab('game'); });
+
+  /* ------------------------------------------------ cari dari nama daerah */
+  var whereRes = [];
+  $('#where-input').addEventListener('input', function () {
+    var q = this.value;
+    whereRes = D.searchAreas(q, 5);
+    $('#where-out').innerHTML = whereRes.map(function (a, i) {
+      return '<button type="button" class="found-row" data-wi="' + i + '"><span class="pf">' + esc(a.prefix) + '</span><span class="fn">' + esc(a.name) +
+        '</span><span class="fm">' + esc(a.province) + ' &middot; huruf seri <b>' + esc(a.letters.length === 26 ? 'semua' : compress(a.letters)) + '</b></span></button>';
+    }).join('') + (whereRes.length ? '<p class="muted where-hint">Ketuk untuk melihat daerah ini di Peta huruf.</p>' : (q.trim() ? '<p class="muted">Tidak ada yang cocok.</p>' : ''));
+  });
+  $('#where-out').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-wi]');
+    if (!b) return;
+    var a = whereRes[Number(b.getAttribute('data-wi'))];
+    showTab('ref');
+    showAtlas(a.prefix, a.name);
+    $('#atlas').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   /* ------------------------------------------------------------ peta huruf */
@@ -679,7 +791,7 @@
 
   var qp = new URL(location.href).searchParams.get('plat');
   var tab = location.hash.replace('#', '');
-  if (['cek', 'banyak', 'ref', 'info'].indexOf(tab) > -1) showTab(tab);
+  if (['cek', 'banyak', 'ref', 'info', 'game'].indexOf(tab) > -1) showTab(tab);
   if (qp) { $('#plate-input').value = qp.slice(0, 14); runSearch(false, false); }
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {

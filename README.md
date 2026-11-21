@@ -33,19 +33,24 @@ Contoh hasil:
 - **Cap tingkat keyakinan** di setiap hasil (tinggi / sedang / ambigu / tingkat provinsi), plus **tanggal cek**, status perbandingan, dan tautan ke artikel pembanding
 - **Tombol "Data ini salah?"** di hasil dan di Peta huruf: membuka formulir GitHub Issue dengan kode dan huruf sudah terisi (nomor plat lengkap tidak ikut dikirim)
 - **Peta huruf**: pilih kode untuk melihat huruf apa milik daerah mana, atau **cari balik**: ketik "Cimahi" untuk tahu kodenya `D` dengan huruf `S, T`
+- **Cari dari nama daerah** langsung di halaman utama: ketik "Kota Bekasi" atau "Sleman", lihat kode dan hurufnya, ketuk untuk membukanya di Peta huruf
+- **Tebak plat**: kuis 10 soal, empat pilihan, skor terbaik tersimpan lokal. Soal hanya memakai huruf berkeyakinan tinggi dan satu daerah, jadi jawaban "benar" tidak pernah berasal dari data yang diperdebatkan
+- **Kanal resmi cek pajak** di setiap hasil: tautan ke SIGNAL (Samsat Digital Nasional) dan situs/aplikasi Bapenda provinsi terkait. CekPlat sendiri tidak melihat data kendaraan atau pajak
 - **Banyak sekaligus**: tempel hingga 500 plat, salin ke Excel atau unduh CSV
 - Samsat Bandung Raya (alamat, telepon, jam layanan, tombol peta dan telepon) dan Samsat Jakarta (induk dan gerai; alamat saja), masa berlaku plat `BB.TT`, riwayat, tautan yang bisa dibagikan (`?plat=B+1234+SKA`)
 - Terang/gelap, responsif dari ponsel sampai desktop, bisa diinstal (PWA) dan jalan offline
-- Tanpa framework, tanpa dependensi, font di-host sendiri; semua diproses di browser, tidak ada data dikirim ke mana pun
+- Tanpa framework, tanpa dependensi saat berjalan (Playwright hanya untuk tes), font di-host sendiri; semua diproses di browser, tidak ada data dikirim ke mana pun
 
 ## Menjalankan
 
 ```bash
 npm start        # server statis di http://localhost:8080
-npm test         # 49 tes parser, data, dan verifikasi
+npm test         # 53 tes parser, data, verifikasi, kuis, dan kanal resmi
+npm install && npx playwright install chromium   # sekali saja, untuk tes UI
+npm run test:ui  # 13 skenario UI di Chromium (hasil, overflow 360-1440px, kuis, pencarian)
 ```
 
-Atau hosting statis di GitHub Pages (workflow di `.github/workflows/pages.yml`; aktifkan Pages dengan sumber "GitHub Actions").
+Atau hosting statis di GitHub Pages: workflow `.github/workflows/pages.yml` menjalankan tes unit dan tes UI, lalu men-deploy. Jika deploy pertama gagal karena Pages belum aktif, buka Settings > Pages dan pilih sumber **GitHub Actions** (workflow juga mencoba mengaktifkannya sendiri).
 
 ## Soal akurasi (baca ini)
 
@@ -101,12 +106,14 @@ index.html            halaman
 css/style.css         gaya ("loket registrasi": kertas, tinta, bayangan keras; mode gelap = aspal)
 fonts/                Barlow Condensed, IBM Plex Sans/Mono (SIL OFL, di-host sendiri)
 js/series.js          tabel huruf seri -> daerah untuk 55 kode (diedit di sini)
+js/quiz.js            kuis tebak plat (hanya huruf berkeyakinan tinggi)
 js/verify.js          hasil verifikasi silang: status, tanggal cek, tautan pembanding, huruf diperdebatkan
 js/data.js            plat D, Samsat, warna, kode wilayah, sumber, pencarian
 js/parser.js          logika parsing plat (bisa dipakai di Node)
 js/app.js             antarmuka
 sw.js, manifest...    PWA / offline
-tests/                49 tes otomatis (node:test)
+tests/                53 tes unit (node:test)
+tests/ui/             13 tes antarmuka (Playwright)
 .github/ISSUE_TEMPLATE/  formulir koreksi data (dipakai tombol "Data ini salah?")
 scripts/serve.js      server statis lokal
 ```
@@ -123,6 +130,7 @@ scripts/serve.js      server statis lokal
 - [Hukumonline: Kode Plat Khusus dan Rahasia](https://www.hukumonline.com/klinik/a/ini-arti-kode-plat-nomor-khusus-dan-rahasia-untuk-kendaraan-pejabat-lt5fa10ac795848/)
 - Verifikasi silang (21 Nov 2026): artikel per-plat Popmama, IDN Times, detikOto, Daihatsu, Auto2000, Astra Otoshop, Gridoto, Kumparan; daftar lengkap tautan per kode ada di `js/verify.js`
 - Samsat Jakarta: [DDTCNews (6 Nov 2026)](https://news.ddtc.co.id/berita/daerah/1823916/mudahkan-wajib-pajak-sejumlah-samsat-di-jakarta-buka-hingga-sabtu), [detikOto Jaksel (2023)](https://oto.detik.com/berita/d-6938153/samsat-jakarta-selatan-sampai-jam-berapa-ini-keterangan-dan-layanannya); Surabaya: [detikJatim (2026)](https://www.detik.com/jatim/berita/d-8289768/samsat-manyar-surabaya-ramai-di-hari-pertama-kerja-usai-libur-tahun-baru)
+- Kanal resmi cek pajak: [Pajakku: link e-Samsat 38 provinsi (Agu 2026)](https://pajakku.com/artikel/cek-pajak-motor-online-terbaru-lengkap-dengan-link-e-samsat-untuk-38-provinsi), [SIGNAL di App Store](https://apps.apple.com/us/app/signal-samsat-digital-nasional/id1587653489), [detikOto: 7 aplikasi cek pajak (2024)](https://oto.detik.com/berita/d-7268374/7-aplikasi-cek-pajak-kendaraan-resmi-dan-langkah-langkahnya). Alamat situs provinsi bisa berubah; provinsi tanpa alamat terverifikasi memakai pencarian
 - Perubahan kode Papua: [detikOto (2024)](https://oto.detik.com/berita/d-7501604/kode-pelat-nomor-di-3-provinsi-papua-diubah)
 - Samsat: [Seputar Bandung Raya (2017)](https://www.seputarbandungraya.com/2017/12/alamat-nomor-telepon-dan-jam-layanan.html), [Kumparan (2021)](https://kumparan.com/info-otomotif/samsat-bandung-ini-lokasi-dan-jam-operasionalnya-1wdVh1Hrnql)
 
