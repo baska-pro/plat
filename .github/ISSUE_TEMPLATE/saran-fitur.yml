@@ -1,0 +1,16 @@
+name: Saran fitur atau laporan bug
+description: Ada yang tidak berfungsi atau ingin ditambahkan? (Untuk data wilayah yang salah, pakai formulir koreksi data.)
+labels: [saran]
+body:
+  - type: textarea
+    id: apa
+    attributes:
+      label: Apa yang terjadi atau apa yang diinginkan
+      description: Kalau bug, tulis langkah untuk mengulanginya.
+    validations:
+      required: true
+  - type: input
+    id: perangkat
+    attributes:
+      label: Perangkat dan browser
+      placeholder: mis. Android, Chrome 130

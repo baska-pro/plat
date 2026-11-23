@@ -3,6 +3,23 @@
   "version": "1.0.0",
   "description": "Cek asal plat nomor kendaraan Indonesia sampai tingkat kota/kabupaten: daerah, jenis kendaraan, Samsat, dan tingkat keyakinan data.",
   "license": "MIT",
+  "author": "Lathif Baska",
+  "homepage": "https://baska-pro.github.io/plat/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/baska-pro/plat.git"
+  },
+  "bugs": {
+    "url": "https://github.com/baska-pro/plat/issues"
+  },
+  "keywords": [
+    "plat-nomor",
+    "nopol",
+    "indonesia",
+    "samsat",
+    "pwa",
+    "vanilla-js"
+  ],
   "private": true,
   "scripts": {
     "test": "node --test \"tests/*.test.js\"",

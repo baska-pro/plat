@@ -1,5 +1,5 @@
 /* Service worker: cache aset statis agar aplikasi cepat dan bisa dipakai offline. */
-var CACHE = 'cekplat-v3';
+var CACHE = 'cekplat-v4';
 var ASSETS = [
   './', 'index.html', 'css/style.css',
   'js/series.js', 'js/verify.js', 'js/data.js', 'js/parser.js', 'js/quiz.js', 'js/app.js',

@@ -1,7 +1,7 @@
 {
   "name": "CekPlat - Cek Asal Plat Nomor",
   "short_name": "CekPlat",
-  "description": "Cek wilayah, Samsat, dan jenis kendaraan dari plat nomor, fokus plat D (Bandung Raya).",
+  "description": "Baca asal plat nomor Indonesia sampai kota/kabupaten: daerah, jenis kendaraan, Samsat, dan tingkat keyakinan data.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
