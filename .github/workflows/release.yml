@@ -22,7 +22,7 @@ jobs:
     env:
       INPUT_VERSION: ${{ inputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Tentukan versi dan ambil catatan dari CHANGELOG.md
         run: |
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then version="$INPUT_VERSION"; else version="${GITHUB_REF_NAME#v}"; fi
