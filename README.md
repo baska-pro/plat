@@ -2,6 +2,8 @@
   <img src="docs/img/banner.png" alt="CekPlat: pembaca plat nomor Indonesia" width="100%">
 </p>
 
+<p align="center"><b>Bahasa Indonesia</b> &nbsp;·&nbsp; <a href="README.en.md">English</a></p>
+
 <p align="center">
   <a href="https://github.com/baska-pro/plat/actions/workflows/pages.yml"><img alt="Tes" src="https://github.com/baska-pro/plat/actions/workflows/pages.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="Lisensi MIT" src="https://img.shields.io/badge/lisensi-MIT-16130d"></a>
@@ -61,6 +63,7 @@ Contoh hasil:
 - **Kanal resmi cek pajak** di setiap hasil: tautan ke SIGNAL (Samsat Digital Nasional) dan situs/aplikasi Bapenda provinsi terkait. CekPlat sendiri tidak melihat data kendaraan atau pajak
 - **Banyak sekaligus**: tempel hingga 500 plat, salin ke Excel atau unduh CSV
 - Samsat Bandung Raya (alamat, telepon, jam layanan, tombol peta dan telepon) dan Samsat Jakarta (induk dan gerai; alamat saja), masa berlaku plat `BB.TT`, riwayat, tautan yang bisa dibagikan (`?plat=B+1234+SKA`)
+- **Data terbuka**: seluruh tabel tersedia sebagai [`data/plat.json`](docs/DATA.md) dengan skema JSON, untuk dipakai proyek lain
 - Terang/gelap, responsif dari ponsel sampai desktop, bisa diinstal (PWA) dan jalan offline
 - Tanpa framework, tanpa dependensi saat berjalan (Playwright hanya untuk tes), font di-host sendiri; semua diproses di browser, tidak ada data dikirim ke mana pun
 
@@ -77,9 +80,10 @@ npm start        # http://localhost:8080
 Tes:
 
 ```bash
-npm test                                           # 53 tes unit: parser, data, verifikasi, kuis
 npm install && npx playwright install chromium     # sekali saja
-npm run test:ui                                    # 13 skenario UI di Chromium
+npm test                                           # 55 tes unit: parser, data, verifikasi, kuis, ekspor JSON
+npm run test:ui                                    # 29 tes UI di Chromium, termasuk aksesibilitas WCAG AA (axe-core)
+npm run lint                                       # ESLint
 ```
 
 Situs statis ini bisa di-host di mana saja. Workflow di `.github/workflows/pages.yml` menjalankan kedua tes lalu men-deploy ke GitHub Pages (Settings > Pages > Source: GitHub Actions).
@@ -112,16 +116,18 @@ js/data.js            plat D, Samsat, warna, kode wilayah, sumber, pencarian
 js/parser.js          logika parsing plat (bisa dipakai di Node)
 js/app.js             antarmuka
 sw.js, manifest...    PWA / offline
-tests/                53 tes unit (node:test)
-tests/ui/             13 tes antarmuka (Playwright)
+tests/                55 tes unit (node:test)
+tests/ui/             29 tes antarmuka dan aksesibilitas (Playwright, axe-core)
+data/plat.json        tabel huruf seri sebagai JSON + skema (dibuat oleh npm run build:data)
 .github/ISSUE_TEMPLATE/  formulir koreksi data (dipakai tombol "Data ini salah?")
 scripts/serve.js      server statis lokal
+scripts/build-*.js    pembuat data/plat.json dan ikon PNG
 docs/                 catatan akurasi dan gambar untuk README
 ```
 
 ## Berkontribusi
 
-Koreksi data paling berguna, terutama kalau Anda punya sumber resmi. Lihat [CONTRIBUTING.md](CONTRIBUTING.md). Laporan keamanan: [SECURITY.md](SECURITY.md).
+Riwayat perubahan ada di [CHANGELOG.md](CHANGELOG.md). Koreksi data paling berguna, terutama kalau Anda punya sumber resmi. Lihat [CONTRIBUTING.md](CONTRIBUTING.md). Laporan keamanan: [SECURITY.md](SECURITY.md).
 
 ## Lisensi
 

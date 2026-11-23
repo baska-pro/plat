@@ -23,6 +23,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
       - run: npm test
 
   ui:
@@ -49,7 +52,7 @@ jobs:
       - name: Siapkan situs statis
         run: |
           mkdir _site
-          cp -r index.html sw.js manifest.webmanifest css js icons fonts _site/
+          cp -r index.html 404.html sw.js manifest.webmanifest robots.txt sitemap.xml css js icons fonts data _site/
           mkdir -p _site/docs/img && cp docs/img/social.png _site/docs/img/
       - uses: actions/configure-pages@v5
         with:

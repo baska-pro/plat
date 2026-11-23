@@ -35,7 +35,7 @@
    */
   function parseExpiry(raw, now) {
     if (!raw) return null;
-    var m = String(raw).trim().match(/^(0?[1-9]|1[0-2])\s*[.\-\/ ]?\s*(\d{2})$/);
+    var m = String(raw).trim().match(/^(0?[1-9]|1[0-2])\s*[.\-/ ]?\s*(\d{2})$/);
     if (!m) return { valid: false };
     var month = parseInt(m[1], 10);
     var year = 2000 + parseInt(m[2], 10);

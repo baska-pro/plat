@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://baska-pro.github.io/plat/data/plat.schema.json",
+  "title": "CekPlat: huruf seri plat nomor Indonesia",
+  "type": "object",
+  "required": ["schema", "description", "source", "codes"],
+  "properties": {
+    "schema": { "type": "string" },
+    "description": { "type": "string" },
+    "source": { "type": "string", "format": "uri" },
+    "codes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "province", "detailed", "verification", "areas", "letters"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[A-Z]{1,2}$", "description": "Kode wilayah di depan angka, mis. D atau AB." },
+          "province": { "type": "string" },
+          "detailed": { "type": "boolean", "description": "true jika huruf seri sudah dipetakan ke kota/kabupaten. false = hanya tingkat provinsi." },
+          "verification": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "required": ["status", "checkedOn", "references"],
+                "properties": {
+                  "status": { "enum": ["cocok", "sebagian", "konflik", "tanpa-pembanding"], "description": "cocok = tidak ada tabel lain yang bertentangan (bukan berarti resmi)." },
+                  "checkedOn": { "type": "string", "format": "date" },
+                  "note": { "type": ["string", "null"] },
+                  "references": {
+                    "type": "array",
+                    "items": { "type": "object", "required": ["label", "url"], "properties": { "label": { "type": "string" }, "url": { "type": "string", "format": "uri" } } }
+                  }
+                }
+              }
+            ]
+          },
+          "areas": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "province", "letters"],
+              "properties": {
+                "name": { "type": "string" },
+                "province": { "type": "string" },
+                "letters": { "type": "array", "items": { "type": "string", "pattern": "^[A-Z]$" } }
+              }
+            }
+          },
+          "letters": {
+            "type": "object",
+            "description": "Huruf pertama seri -> daerah.",
+            "propertyNames": { "pattern": "^[A-Z]$" },
+            "additionalProperties": {
+              "type": "object",
+              "required": ["areas", "confidence"],
+              "properties": {
+                "areas": { "type": "array", "minItems": 1, "items": { "type": "string" }, "description": "Lebih dari satu = sumber bertentangan atau huruf dipakai bersama." },
+                "confidence": { "enum": ["tinggi", "sedang", "rendah"], "description": "rendah = ambigu." },
+                "note": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

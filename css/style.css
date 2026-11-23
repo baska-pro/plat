@@ -22,7 +22,7 @@
   --rule: rgba(22, 19, 13, .2);
   --signal: #ffc800;
   --signal-ink: #16130d;
-  --red: #cf3a1b;
+  --red: #b32f14;
   --green: #12704a;
   --blue: #1d5bd6;
   --shadow-c: #16130d;
@@ -235,6 +235,8 @@ h2 { font-family: var(--f-display); font-weight: 800; text-transform: uppercase;
 .note { display: flex; gap: 12px; padding: 10px 14px; border: 2px solid var(--ink); background: var(--card); font-size: .92rem; align-items: flex-start; }
 .note b.tag { flex: none; min-width: 5.6rem; text-align: center; font: 700 .72rem/1 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; padding: 5px 6px 4px; background: var(--ink); color: var(--paper); margin-top: 2px; }
 .note.warn { border-color: var(--red); } .note.warn b.tag { background: var(--red); color: #fff; }
+:root[data-theme="dark"] .note.warn b.tag { color: #16130d; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .note.warn b.tag { color: #16130d; } }
 .note.err { border-color: var(--red); background: color-mix(in srgb, var(--red) 12%, var(--card)); }
 
 .form-rows { border-top: 2px solid var(--ink); }

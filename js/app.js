@@ -253,12 +253,6 @@
       '<div class="keys-legend"><span><i class="a"></i>huruf plat ini</span><span><i class="b"></i>huruf lain daerah yang sama</span><span><i class="c"></i>daerah lain</span></div></div>';
   }
 
-  function sourcesHtml(ids) {
-    return (ids || []).map(function (id) {
-      var s = D.SOURCES[id];
-      return s ? '<a href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' + esc(s.title) + '</a>' : '';
-    }).filter(Boolean).join('<br>');
-  }
 
   function samsatHtml(r) {
     if (!r.samsat.length) return '';
