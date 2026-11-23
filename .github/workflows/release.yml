@@ -1,8 +1,17 @@
 name: Release
 
+# Dua cara membuat rilis:
+#  1. push tag (git tag v1.0.0 && git push origin v1.0.0)
+#  2. tombol "Run workflow" di tab Actions, isi versi tanpa awalan "v" (tag dibuat otomatis di commit terbaru)
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versi tanpa awalan v (harus ada di CHANGELOG.md), mis. 1.0.0'
+        required: true
+        default: '1.0.0'
 
 permissions:
   contents: write
@@ -10,11 +19,15 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      INPUT_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
-      - name: Ambil catatan rilis dari CHANGELOG.md
+      - name: Tentukan versi dan ambil catatan dari CHANGELOG.md
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then version="$INPUT_VERSION"; else version="${GITHUB_REF_NAME#v}"; fi
+          case "$version" in *[!0-9A-Za-z.+-]*|"") echo "Versi tidak valid" >&2; exit 1;; esac
+          echo "VERSION=$version" >> "$GITHUB_ENV"
           awk -v v="$version" '
             $0 ~ "^## \\[" v "\\]" { on = 1; next }
             on && /^## \[/ { exit }
@@ -26,4 +39,6 @@ jobs:
       - name: Buat GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "CekPlat ${GITHUB_REF_NAME}" --notes-file notes.md --verify-tag
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then echo "Rilis v$VERSION sudah ada" >&2; exit 1; fi
+          gh release create "v$VERSION" --title "CekPlat v$VERSION" --notes-file notes.md --target "$GITHUB_SHA"
